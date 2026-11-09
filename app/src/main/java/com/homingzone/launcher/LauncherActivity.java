@@ -123,16 +123,24 @@ public class LauncherActivity extends Activity {
         page.setOrientation(LinearLayout.VERTICAL);
         page.setPadding(dp(42), dp(26), 0, dp(20));
 
-        // Pill navigation
+        // Navigation and account actions
+        LinearLayout topBar = new LinearLayout(this);
+        topBar.setGravity(Gravity.CENTER_VERTICAL);
         navBar = new LinearLayout(this);
         navBar.setGravity(Gravity.CENTER_VERTICAL);
         navBar.setPadding(dp(6), dp(6), dp(6), dp(6));
         navBar.setBackground(roundRect(Color.argb(95, 0, 0, 0), dp(30), Color.TRANSPARENT, 0));
-        String[] tabs = {"Home", "Apps", "Settings"};
+        navBar.addView(actionItem("✦", "Google Assistant", false),
+                new LinearLayout.LayoutParams(dp(54), dp(54)));
+        String[] tabs = {"Home", "Apps", "Explore"};
         for (int i = 0; i < tabs.length; i++) navBar.addView(navItem(tabs[i], i));
-        LinearLayout.LayoutParams navLp = new LinearLayout.LayoutParams(-2, -2);
-        navLp.gravity = Gravity.CENTER_HORIZONTAL;
-        page.addView(navBar, navLp);
+        topBar.addView(navBar, new LinearLayout.LayoutParams(-2, -2));
+
+        View spacer = new View(this);
+        topBar.addView(spacer, new LinearLayout.LayoutParams(0, 1, 1));
+        topBar.addView(actionItem("👤", "Profile", false), new LinearLayout.LayoutParams(dp(54), dp(54)));
+        topBar.addView(actionItem("⚙", "Settings", true), new LinearLayout.LayoutParams(dp(54), dp(54)));
+        page.addView(topBar, new LinearLayout.LayoutParams(-1, -2));
 
         // Hero
         LinearLayout hero = new LinearLayout(this);
@@ -192,6 +200,7 @@ public class LauncherActivity extends Activity {
 
         // Row
         rowTitle = text("Your apps", 24, white, true);
+        rowTitle.setVisibility(View.GONE);
         LinearLayout.LayoutParams rtLp = new LinearLayout.LayoutParams(-2, -2);
         rtLp.leftMargin = dp(14);
         page.addView(rowTitle, rtLp);
@@ -199,11 +208,15 @@ public class LauncherActivity extends Activity {
         HorizontalScrollView scroll = new HorizontalScrollView(this);
         scroll.setHorizontalScrollBarEnabled(false);
         scroll.setClipToPadding(false);
+        scroll.setPadding(0, dp(8), dp(28), dp(8));
+        scroll.setBackground(roundRect(Color.argb(150, 25, 27, 34), dp(28),
+                Color.argb(125, 255, 255, 255), dp(1)));
         rowBox = new LinearLayout(this);
         rowBox.setOrientation(LinearLayout.HORIZONTAL);
-        rowBox.setPadding(dp(14), dp(12), dp(40), dp(14));
+        rowBox.setGravity(Gravity.CENTER_VERTICAL);
+        rowBox.setPadding(dp(14), dp(4), dp(14), dp(4));
         scroll.addView(rowBox);
-        page.addView(scroll, new LinearLayout.LayoutParams(-1, dp(214)));
+        page.addView(scroll, new LinearLayout.LayoutParams(-1, dp(142)));
 
         int screenH = getResources().getDisplayMetrics().heightPixels;
         FrameLayout root = new FrameLayout(this);
@@ -238,15 +251,7 @@ public class LauncherActivity extends Activity {
         styleNav(t, false, tabSelected(index));
         t.setOnFocusChangeListener((v, focused) -> styleNav(t, focused, tabSelected(index)));
         t.setOnClickListener(v -> {
-            if (index == 2) {
-                try {
-                    Intent s = new Intent(Settings.ACTION_SETTINGS);
-                    s.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
-                    startActivity(s);
-                } catch (Exception ignored) { }
-                return;
-            }
-            showAll = index == 1;
+            showAll = index > 0;
             for (int i = 0; i < navBar.getChildCount(); i++) {
                 TextView other = (TextView) navBar.getChildAt(i);
                 styleNav(other, other.hasFocus(), tabSelected(i));
@@ -257,7 +262,27 @@ public class LauncherActivity extends Activity {
     }
 
     private boolean tabSelected(int index) {
-        return index == (showAll ? 1 : 0);
+        return showAll ? index > 0 : index == 0;
+    }
+
+    private TextView actionItem(String symbol, String description, boolean opensSettings) {
+        TextView action = text(symbol, 24, white, true);
+        action.setGravity(Gravity.CENTER);
+        action.setContentDescription(description);
+        if ("✦".equals(symbol)) action.setTextColor(Color.rgb(66, 133, 244));
+        action.setFocusable(true);
+        action.setBackground(roundRect(Color.TRANSPARENT, dp(28), Color.TRANSPARENT, 0));
+        action.setOnFocusChangeListener((v, focused) -> action.setBackground(roundRect(
+                focused ? Color.argb(238, 240, 240, 244) : Color.TRANSPARENT,
+                dp(28), Color.TRANSPARENT, 0)));
+        if (opensSettings) {
+            action.setOnClickListener(v -> {
+                Intent settings = new Intent(Settings.ACTION_SETTINGS);
+                settings.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+                startActivity(settings);
+            });
+        }
+        return action;
     }
 
     private void styleNav(TextView t, boolean focused, boolean selected) {
@@ -309,18 +334,10 @@ public class LauncherActivity extends Activity {
         icon.setImageDrawable(info.loadIcon(getPackageManager()));
         icon.setScaleType(ImageView.ScaleType.FIT_CENTER);
         card.addView(icon, new FrameLayout.LayoutParams(dp(56), dp(56), Gravity.CENTER));
-        item.addView(card, new LinearLayout.LayoutParams(dp(210), dp(118)));
+        item.addView(card, new LinearLayout.LayoutParams(dp(174), dp(102)));
 
-        TextView name = text(label(info), 15, white, true);
-        name.setMaxLines(1);
-        name.setEllipsize(TextUtils.TruncateAt.END);
-        LinearLayout.LayoutParams nameLp = new LinearLayout.LayoutParams(-1, -2);
-        nameLp.topMargin = dp(9);
-        item.addView(name, nameLp);
-        item.addView(text(kind(info), 14, Color.argb(130, 255, 255, 255), false));
-
-        LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(dp(210), -2);
-        lp.rightMargin = dp(18);
+        LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(dp(174), -2);
+        lp.rightMargin = dp(12);
         item.setLayoutParams(lp);
 
         item.setOnFocusChangeListener((v, focused) -> {

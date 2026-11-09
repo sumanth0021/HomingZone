@@ -3,9 +3,9 @@
 A lightweight, native Android TV launcher prototype.
 
 ## Design
-- Apple TV-style layout: pill navigation, hero for the focused app, 16:9 app cards
+- Hybrid TV layout: Home, Apps, and Explore navigation with Assistant, profile, and Settings actions
 - Backdrop colour follows the focused app's icon
-- Home (favourites) and Apps (everything installed) tabs; Settings opens system settings
+- Home shows favourites, while Apps and Explore expose installed apps; Settings opens system settings
 - D-pad / TV remote focus navigation
 - Optional recommended-show hero (Netflix / Prime Video) via TMDB: paste a free API key into `TMDB_KEY` in LauncherActivity.java. Leave it empty and the launcher makes no network requests
 - No analytics, ads, or background service
