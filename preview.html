@@ -1,0 +1,101 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>HomingZone — TV UI Preview</title>
+<style>
+@property --tint{syntax:'<color>';inherits:true;initial-value:#2e4068}
+:root{--dark:#090a0e}
+*{box-sizing:border-box}
+html,body{height:100%;margin:0;background:var(--dark);color:#fff;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;overflow:hidden}
+.screen{height:100%;min-height:560px;padding:2.6vh 3vw 2.4vh;display:flex;flex-direction:column;transition:--tint .35s;background:linear-gradient(180deg,var(--tint) 0%,color-mix(in srgb,var(--tint) 40%,var(--dark)) 50%,var(--dark) 100%)}
+.nav{align-self:center;display:flex;gap:4px;padding:6px;border-radius:999px;background:rgba(0,0,0,.38)}
+.nav button{font:600 clamp(13px,1.2vw,18px) inherit;font-family:inherit;color:rgba(255,255,255,.7);background:none;border:0;padding:.6em 1.6em;border-radius:999px;cursor:pointer}
+.nav button.sel{background:rgba(255,255,255,.22);color:#fff}
+.nav button:focus{outline:0;background:#f0f0f4;color:var(--dark)}
+.hero{flex:1;display:flex;align-items:center;justify-content:space-between;padding:0 9vw 0 1vw}
+h1{font-size:clamp(36px,5.2vw,86px);letter-spacing:.14em;text-transform:uppercase;margin:0;font-weight:800;line-height:1}
+.meta{margin:1.2vh 0 1.4vh;font-weight:600;font-size:clamp(12px,1.1vw,17px);color:rgba(255,255,255,.72)}
+.desc{max-width:26em;font-size:clamp(14px,1.3vw,20px);line-height:1.4;margin:0 0 3vh}
+.open{font:700 clamp(14px,1.25vw,19px) inherit;font-family:inherit;color:#fff;background:rgba(255,255,255,.33);border:0;border-radius:10px;padding:.75em 2em;cursor:pointer}
+.open:focus{outline:0;background:#f5f5f8;color:var(--dark)}
+.art{width:clamp(130px,16vw,260px);aspect-ratio:1;border-radius:22%;display:grid;place-items:center;font-size:clamp(50px,7vw,120px);font-weight:800;box-shadow:0 30px 80px rgba(0,0,0,.4)}
+.dots{display:flex;justify-content:center;align-items:center;gap:8px;height:24px}
+.dots i{width:8px;height:8px;border-radius:4px;background:rgba(255,255,255,.35)}
+.dots i.on{width:24px;background:#fff}
+.rt{font-size:clamp(16px,1.7vw,26px);font-weight:700;margin:0 0 0 1vw}
+.row{display:flex;gap:18px;padding:14px 1vw 10px;overflow:hidden}
+.card{flex:0 0 clamp(150px,15vw,240px);outline:0}
+.thumb{aspect-ratio:16/9;border-radius:12px;display:grid;place-items:center;font-size:clamp(24px,2.8vw,46px);font-weight:800;border:3px solid transparent;transition:transform .14s}
+.card:focus .thumb{transform:scale(1.08);border-color:#fff}
+.card b{display:block;margin-top:10px;font-size:clamp(12px,1.1vw,16px)}
+.card small{color:rgba(255,255,255,.55);font-size:clamp(11px,.95vw,14px)}
+.bg{position:fixed;inset:0;display:none;transition:background .6s}.bg::after{content:'';position:absolute;inset:0;background:linear-gradient(90deg,rgba(9,10,14,.94),rgba(9,10,14,.45) 50%,transparent),linear-gradient(0deg,#090a0e 0%,transparent 50%)}
+.on .bg{display:block}.on .screen{background:none;position:relative}.on .art{display:none}
+.note{position:fixed;right:16px;top:12px;font-size:11px;opacity:.55}
+</style>
+</head>
+<body>
+<div class="bg" id="bg"></div>
+<main class="screen" id="screen">
+  <nav class="nav" id="nav"><button class="sel">Home</button><button>Apps</button><button>Settings</button></nav>
+  <section class="hero">
+    <div><h1 id="title"></h1><div class="meta" id="meta"></div><p class="desc" id="desc"></p><button class="open" id="open">Open</button></div>
+    <div class="art" id="art"></div>
+  </section>
+  <div class="dots" id="dots"></div>
+  <h2 class="rt" id="rt">Your apps</h2>
+  <div class="row" id="row"></div>
+</main>
+<div class="note">Design preview · arrow keys to move, Enter to select</div>
+<script>
+const apps=[
+ {n:'Netflix',k:'Video',g:'N',c:'#e50914'},{n:'YouTube',k:'Video',g:'▶',c:'#e0243a'},
+ {n:'Prime Video',k:'Video',g:'prime',c:'#1a98ff'},{n:'VLC',k:'Video',g:'V',c:'#f28a1a'},
+ {n:'Amazon Music',k:'Music',g:'♪',c:'#1e9a62'},{n:'Settings',k:'App',g:'⚙',c:'#5b6b86'},
+ {n:'Live TV',k:'App',g:'▣',c:'#7a4fd6'},{n:'Play Store',k:'App',g:'◉',c:'#1fa463'},{n:'Files',k:'App',g:'▤',c:'#c28a2c'}];
+const say={Video:n=>`Jump back into ${n} and keep watching.`,Music:n=>`Open ${n} and press play.`,App:n=>`Open ${n}.`};
+const $=id=>document.getElementById(id);
+const tabs=[...$('nav').children];let list=apps.slice(0,5),cards=[];
+function tint(c){$('screen').style.setProperty('--tint',`color-mix(in srgb,${c} 62%,#000)`)}
+function pick(a){
+ if(document.body.classList.contains('on'))return;
+ $('title').textContent=a.n;$('meta').textContent=a.k;$('desc').textContent=say[a.k](a.n);
+ $('art').textContent=a.g;$('art').style.background=a.c;tint(a.c);
+ const cnt=Math.min(list.length,8),on=Math.floor(list.indexOf(a)*cnt/list.length);
+ $('dots').innerHTML=Array.from({length:cnt},(_,i)=>`<i class="${i===on?'on':''}"></i>`).join('');
+}
+function fill(){
+ $('rt').textContent=list.length>5?'All apps':'Your apps';
+ $('row').innerHTML='';
+ cards=list.map(a=>{const d=document.createElement('div');d.className='card';d.tabIndex=0;
+  d.innerHTML=`<div class="thumb" style="background:color-mix(in srgb,${a.c} 58%,#090a0e)">${a.g}</div><b>${a.n}</b><small>${a.k}</small>`;
+  d.addEventListener('focus',()=>pick(a));$('row').appendChild(d);return d});
+ pick(list[0]);
+}
+tabs.forEach((t,i)=>t.addEventListener('click',()=>{if(i===2)return;
+ tabs.forEach(x=>x.classList.remove('sel'));t.classList.add('sel');list=i?apps:apps.slice(0,5);fill()}));
+const groups=()=>[tabs,[$('open')],cards];
+document.addEventListener('keydown',e=>{
+ const g=groups(),gi=g.findIndex(x=>x.includes(document.activeElement));
+ if(gi<0&&e.key.startsWith('Arrow')){e.preventDefault();cards[0].focus();return}
+ const k=e.key,i=g[gi]?g[gi].indexOf(document.activeElement):0;
+ if(k==='ArrowRight'&&i<g[gi].length-1){e.preventDefault();g[gi][i+1].focus()}
+ if(k==='ArrowLeft'&&i>0){e.preventDefault();g[gi][i-1].focus()}
+ if(k==='ArrowUp'&&gi>0){e.preventDefault();g[gi-1][Math.min(i,g[gi-1].length-1)].focus()}
+ if(k==='ArrowDown'&&gi<2){e.preventDefault();g[gi+1][Math.min(i,g[gi+1].length-1)].focus()}
+ if(k==='Enter'&&gi===0)document.activeElement.click();
+});
+fill();cards[0].focus();
+const feat=[{p:'Netflix',g:'radial-gradient(ellipse at 75% 40%,#c4372b,#3b1a2a 60%,#10131f)'},{p:'Prime Video',g:'radial-gradient(ellipse at 70% 35%,#1f7fbf,#14304f 60%,#0b1220)'},{p:'Netflix',g:'radial-gradient(ellipse at 80% 50%,#d38a2c,#4a2a12 60%,#150f0a)'},{p:'Prime Video',g:'radial-gradient(ellipse at 72% 40%,#6a4fd0,#25194a 60%,#0d0b1a)'}];
+let fi=0;
+function hero(){const f=feat[fi];document.body.classList.add('on');$('bg').style.background=f.g;
+ $('title').textContent='Featured show';$('meta').textContent='Popular on '+f.p;
+ $('desc').textContent='Backdrop art and synopsis come from TMDB on your TV. This preview uses placeholder colour.';
+ $('open').textContent='Open '+f.p;
+ $('dots').innerHTML=feat.map((_,i)=>`<i class="${i===fi?'on':''}"></i>`).join('')}
+hero();setInterval(()=>{fi=(fi+1)%feat.length;hero()},5000);
+</script>
+</body>
+</html>
