@@ -1,28 +1,31 @@
-# HomingZone Launcher
+# HomingZone — Streaming Discovery Prototype
 
-Cinematic Android TV launcher prototype inspired by premium streaming home screens.
+This version automatically discovers a small set of known streaming/media apps installed on the TV and rotates a cinematic hero card between those apps every 12 seconds while the launcher is visible.
 
-- Full-screen navy-to-warm gradient
-- Glass-style top navigation
-- Featured welcome area and action buttons
-- Page indicator dots
-- Translucent bottom dock populated from installed apps
-- TV remote focus states and app launching
-- Discovers both regular Android launcher and Android TV Leanback apps
-- No network permission, analytics, ads, or background services
-- Original Google TV launcher is never modified or disabled
+## Important distinction
+Installed-app discovery does not provide access to Netflix, Prime Video, YouTube, or other services' private movie/series catalogues. This version recommends installed streaming destinations, not individual shows. A future show-recommendation feature needs a content metadata provider (for example TMDB) and supported availability data; it should not scrape private app data.
 
-Open `preview.html` in a desktop browser to review the visual direction. The browser is a visual prototype; actual TV behaviour still needs occasional device testing.
+## Current features
+- Automatic featured-app rotation from detected installed apps
+- Gradient theme changes by featured platform
+- Direct open-app button
+- Bottom dock with detected launcher/Leanback apps
+- Lightweight native Android UI, no network permission or background service
+- Rotation pauses while the launcher is not in the foreground
+- Original Google TV launcher is not modified or disabled
 
-Build APK using the GitHub Actions workflow. Artifact name: `HomingZone-debug`.
+## Browser preview
+Open `preview.html` in Chrome. It uses sample apps to demonstrate the layout; the actual Android build detects apps installed on the TV.
 
-Install:
+## Build and install
+Push to GitHub and download the `HomingZone-debug` artifact from Actions.
+
 ```cmd
 adb install -r app-debug.apk
 adb shell am start -n com.homingzone.launcher/.LauncherActivity
 ```
 
-If the debug signing key changed, uninstall only the old HomingZone app before reinstalling:
+If debug signing keys differ, uninstall only HomingZone before reinstalling:
 ```cmd
 adb uninstall com.homingzone.launcher
 adb install app-debug.apk
