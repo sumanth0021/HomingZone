@@ -136,7 +136,9 @@ public class LauncherActivity extends Activity {
             if (reorderItem != null && reorderItem.tile != null && reorderItem.tile.hasFocus()) {
                 reorderMode = true;
                 longPressActivated = true;
-                heroSubtitle.setText("Move with ◀ ▶  ·  OK to save  ·  BACK to cancel");
+                Toast.makeText(LauncherActivity.this,
+                        "Move with LEFT/RIGHT · OK to save · BACK to cancel",
+                        Toast.LENGTH_SHORT).show();
                 reorderItem.tile.animate().scaleX(1.2f).scaleY(1.2f)
                         .setDuration(FOCUS_MS).setInterpolator(decelerate).start();
             }
@@ -237,7 +239,6 @@ public class LauncherActivity extends Activity {
             reorderMode = false;
             reorderItem = null;
             if (lastFocused != null) {
-                select(lastFocused);
                 lastFocused.tile.requestFocus();
             }
             return;
@@ -636,7 +637,6 @@ public class LauncherActivity extends Activity {
                         reorderMode = false;
                         reorderItem = null;
                         saveOrder();
-                        select(item);
                         return true;
                     }
                     launch(item);
