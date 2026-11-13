@@ -520,7 +520,7 @@ public class LauncherActivity extends Activity {
 
         tile.setOnFocusChangeListener((v, focused) -> onTileFocus(item, focused));
         tile.setOnClickListener(v -> launch(item));
-        return entry;
+        return tile;
     }
 
     /** Puts the app's TV banner on its tile, or its icon on a dark tile if there is no banner. */
