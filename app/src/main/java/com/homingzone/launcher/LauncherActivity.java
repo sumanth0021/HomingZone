@@ -7,6 +7,7 @@ import android.content.Intent;
 import android.content.IntentFilter;
 import android.content.pm.PackageManager;
 import android.content.pm.ResolveInfo;
+import android.net.Uri;
 import android.graphics.Color;
 import android.graphics.Outline;
 import android.graphics.Rect;
@@ -18,6 +19,7 @@ import android.os.Bundle;
 import android.os.Handler;
 import android.os.Looper;
 import android.provider.Settings;
+import android.content.SharedPreferences;
 import android.text.TextUtils;
 import android.text.format.DateFormat;
 import android.view.Gravity;
@@ -75,6 +77,11 @@ public class LauncherActivity extends Activity {
 
     // Tiles whose artwork is loaded per UI-thread turn, so the screen never freezes on startup.
     private static final int ART_BATCH = 3;
+    private static final String ORDER_PREFS = "app_order";
+    private static final String ORDER_KEY = "packages";
+    private static final String WALLPAPER_PREFS = "wallpaper";
+    private static final String WALLPAPER_URI_KEY = "uri";
+    private static final int PICK_WALLPAPER = 42;
 
     private static final int BLACK = Color.rgb(6, 8, 13);
     private static final int WHITE = Color.WHITE;
@@ -107,6 +114,7 @@ public class LauncherActivity extends Activity {
     };
 
     private FrameLayout root;
+    private ImageView wallpaperView;
     private HorizontalScrollView appScroll;
     private LinearLayout dock;
     private TextView clock;
@@ -120,6 +128,20 @@ public class LauncherActivity extends Activity {
     private boolean appsDirty = true;  // true when the installed-app list may have changed
     private boolean resumed;
     private java.text.DateFormat timeFormat;
+    private boolean reorderMode;
+    private AppItem reorderItem;
+    private boolean longPressActivated;
+    private final Runnable enterReorderMode = new Runnable() {
+        @Override public void run() {
+            if (reorderItem != null && reorderItem.tile != null && reorderItem.tile.hasFocus()) {
+                reorderMode = true;
+                longPressActivated = true;
+                heroSubtitle.setText("Move with ◀ ▶  ·  OK to save  ·  BACK to cancel");
+                reorderItem.tile.animate().scaleX(1.2f).scaleY(1.2f)
+                        .setDuration(FOCUS_MS).setInterpolator(decelerate).start();
+            }
+        }
+    };
 
     // Refresh the dock shortly after a package change (several broadcasts often arrive together).
     private final Runnable refreshTask = new Runnable() {
@@ -211,6 +233,15 @@ public class LauncherActivity extends Activity {
     }
 
     @Override public void onBackPressed() {
+        if (reorderMode) {
+            reorderMode = false;
+            reorderItem = null;
+            if (lastFocused != null) {
+                select(lastFocused);
+                lastFocused.tile.requestFocus();
+            }
+            return;
+        }
         // A launcher has nowhere to go back to.
     }
 
@@ -235,14 +266,21 @@ public class LauncherActivity extends Activity {
     }
 
     private void addWallpaper() {
-        ImageView wallpaper = new ImageView(this);
-        wallpaper.setScaleType(ImageView.ScaleType.CENTER_CROP);
+        wallpaperView = new ImageView(this);
+        wallpaperView.setScaleType(ImageView.ScaleType.CENTER_CROP);
         try {
-            wallpaper.setImageResource(WALLPAPER);
+            String savedUri = getSharedPreferences(WALLPAPER_PREFS, MODE_PRIVATE)
+                    .getString(WALLPAPER_URI_KEY, "");
+            if (!savedUri.isEmpty()) {
+                wallpaperView.setImageURI(Uri.parse(savedUri));
+                if (wallpaperView.getDrawable() == null) wallpaperView.setImageResource(WALLPAPER);
+            } else {
+                wallpaperView.setImageResource(WALLPAPER);
+            }
         } catch (OutOfMemoryError | RuntimeException e) {
             return; // keep the plain gradient
         }
-        root.addView(wallpaper, new FrameLayout.LayoutParams(-1, -1));
+        root.addView(wallpaperView, new FrameLayout.LayoutParams(-1, -1));
     }
 
     /** Dark overlays that keep the clock and dock readable on any wallpaper. */
@@ -359,6 +397,17 @@ public class LauncherActivity extends Activity {
                 Toast.makeText(this, "Settings can't be opened", Toast.LENGTH_SHORT).show();
             }
         });
+        settings.setOnLongClickListener(v -> {
+            Intent picker = new Intent(Intent.ACTION_OPEN_DOCUMENT);
+            picker.addCategory(Intent.CATEGORY_OPENABLE);
+            picker.setType("image/*");
+            try {
+                startActivityForResult(picker, PICK_WALLPAPER);
+            } catch (RuntimeException e) {
+                Toast.makeText(this, "Wallpaper picker unavailable", Toast.LENGTH_SHORT).show();
+            }
+            return true;
+        });
         // DOWN goes back to the app that was selected, not to whichever tile is nearest.
         settings.setOnKeyListener((v, keyCode, event) -> {
             if (keyCode == KeyEvent.KEYCODE_DPAD_DOWN && event.getAction() == KeyEvent.ACTION_DOWN
@@ -404,6 +453,28 @@ public class LauncherActivity extends Activity {
         root.addView(bar, lp);
     }
 
+    @Override protected void onActivityResult(int requestCode, int resultCode, Intent data) {
+        super.onActivityResult(requestCode, resultCode, data);
+        if (requestCode != PICK_WALLPAPER || resultCode != RESULT_OK
+                || data == null || data.getData() == null) return;
+
+        Uri uri = data.getData();
+        try {
+            int flags = data.getFlags() & (Intent.FLAG_GRANT_READ_URI_PERMISSION
+                    | Intent.FLAG_GRANT_WRITE_URI_PERMISSION);
+            getContentResolver().takePersistableUriPermission(uri, flags);
+        } catch (SecurityException ignored) {
+            // Some TV pickers return a readable URI without persistable permission.
+        }
+        getSharedPreferences(WALLPAPER_PREFS, MODE_PRIVATE).edit()
+                .putString(WALLPAPER_URI_KEY, uri.toString()).apply();
+        try {
+            wallpaperView.setImageURI(uri);
+        } catch (RuntimeException e) {
+            Toast.makeText(this, "Wallpaper could not be loaded", Toast.LENGTH_SHORT).show();
+        }
+    }
+
     private void styleSettings(ImageView button, boolean focused) {
         button.setBackground(roundRect(focused ? Color.argb(240, 245, 245, 248) : GLASS_FILL, dp(50)));
         if (focused) button.setColorFilter(Color.rgb(20, 22, 28));
@@ -429,7 +500,7 @@ public class LauncherActivity extends Activity {
         boolean restoreFocus = dock.hasFocus() || root.findFocus() == null;
         String keepPackage = lastFocused != null ? lastFocused.packageName : null;
 
-        items = queryApps();
+        items = applySavedOrder(queryApps());
         dock.removeAllViews();
         lastFocused = null;
         pendingScroll = null;
@@ -478,6 +549,32 @@ public class LauncherActivity extends Activity {
         return result;
     }
 
+    private List<AppItem> applySavedOrder(List<AppItem> discovered) {
+        SharedPreferences preferences = getSharedPreferences(ORDER_PREFS, MODE_PRIVATE);
+        String saved = preferences.getString(ORDER_KEY, "");
+        if (saved.isEmpty() || discovered.size() < 2) return discovered;
+
+        Map<String, AppItem> byPackage = new LinkedHashMap<>();
+        for (AppItem item : discovered) byPackage.put(item.packageName, item);
+        List<AppItem> ordered = new ArrayList<>(discovered.size());
+        for (String packageName : saved.split("\\|")) {
+            AppItem item = byPackage.remove(packageName);
+            if (item != null) ordered.add(item);
+        }
+        ordered.addAll(byPackage.values());
+        return ordered;
+    }
+
+    private void saveOrder() {
+        StringBuilder value = new StringBuilder();
+        for (AppItem item : items) {
+            if (value.length() > 0) value.append('|');
+            value.append(item.packageName);
+        }
+        getSharedPreferences(ORDER_PREFS, MODE_PRIVATE)
+                .edit().putString(ORDER_KEY, value.toString()).apply();
+    }
+
     private void collect(PackageManager pm, String category, Map<String, ResolveInfo> out) {
         Intent intent = new Intent(Intent.ACTION_MAIN);
         intent.addCategory(category);
@@ -519,8 +616,66 @@ public class LauncherActivity extends Activity {
         item.ring = ringShape != null ? ringShape.newDrawable() : null;
 
         tile.setOnFocusChangeListener((v, focused) -> onTileFocus(item, focused));
+        tile.setOnKeyListener((v, keyCode, event) -> {
+            if (isConfirmKey(keyCode)) {
+                if (event.getAction() == KeyEvent.ACTION_DOWN) {
+                    if (event.getRepeatCount() == 0) {
+                        reorderItem = item;
+                        handler.postDelayed(enterReorderMode, android.view.ViewConfiguration
+                                .getLongPressTimeout());
+                    }
+                    return true;
+                }
+                if (event.getAction() == KeyEvent.ACTION_UP) {
+                    handler.removeCallbacks(enterReorderMode);
+                    if (longPressActivated) {
+                        longPressActivated = false;
+                        return true;
+                    }
+                    if (reorderMode) {
+                        reorderMode = false;
+                        reorderItem = null;
+                        saveOrder();
+                        select(item);
+                        return true;
+                    }
+                    launch(item);
+                    return true;
+                }
+            }
+            if (reorderMode && event.getAction() == KeyEvent.ACTION_DOWN) {
+                if (keyCode == KeyEvent.KEYCODE_DPAD_LEFT) {
+                    moveItem(item, -1);
+                    return true;
+                }
+                if (keyCode == KeyEvent.KEYCODE_DPAD_RIGHT) {
+                    moveItem(item, 1);
+                    return true;
+                }
+            }
+            return false;
+        });
         tile.setOnClickListener(v -> launch(item));
         return tile;
+    }
+
+    private boolean isConfirmKey(int keyCode) {
+        return keyCode == KeyEvent.KEYCODE_DPAD_CENTER
+                || keyCode == KeyEvent.KEYCODE_ENTER
+                || keyCode == KeyEvent.KEYCODE_NUMPAD_ENTER;
+    }
+
+    private void moveItem(AppItem item, int direction) {
+        int from = items.indexOf(item);
+        int to = from + direction;
+        if (from < 0 || to < 0 || to >= items.size()) return;
+
+        Collections.swap(items, from, to);
+        View moving = item.entry;
+        dock.removeViewAt(from);
+        dock.addView(moving, to);
+        item.tile.requestFocus();
+        scrollToItem(item, true);
     }
 
     /** Puts the app's TV banner on its tile, or its icon on a dark tile if there is no banner. */
