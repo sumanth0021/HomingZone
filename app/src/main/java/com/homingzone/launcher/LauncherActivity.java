@@ -1,9 +1,10 @@
 package com.homingzone.launcher;
 
 import android.app.Activity;
+import android.content.BroadcastReceiver;
+import android.content.Context;
 import android.content.Intent;
-import android.content.pm.PackageManager;
-import android.content.pm.ResolveInfo;
+import android.content.IntentFilter;
 import android.graphics.Color;
 import android.graphics.Outline;
 import android.graphics.Typeface;
@@ -13,6 +14,7 @@ import android.os.Bundle;
 import android.os.Handler;
 import android.os.Looper;
 import android.text.TextUtils;
+import android.util.Log;
 import android.view.Gravity;
 import android.view.View;
 import android.view.ViewOutlineProvider;
@@ -22,16 +24,13 @@ import android.widget.HorizontalScrollView;
 import android.widget.ImageView;
 import android.widget.LinearLayout;
 import android.widget.TextView;
+import android.widget.Toast;
 
 import java.text.SimpleDateFormat;
 import java.util.ArrayList;
-import java.util.Collections;
-import java.util.Comparator;
 import java.util.Date;
-import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
-import java.util.Map;
 
 public class LauncherActivity extends Activity {
     private final int white = Color.WHITE;
@@ -49,7 +48,32 @@ public class LauncherActivity extends Activity {
             handler.postDelayed(this, 30000);
         }
     };
-    private List<ResolveInfo> apps = new ArrayList<>();
+    private static final String TAG = "HomingZone";
+    private AppCatalog catalog;
+    private List<AppCatalog.AppEntry> apps = new ArrayList<>();
+    private boolean listBuilt;      // true once the dock has been filled at least once
+    private boolean resumed;        // true while the launcher is on screen
+    private boolean dirty;          // an app was installed/removed/updated while we were not looking
+    private boolean receiverRegistered;
+
+    private final Runnable refreshTask = new Runnable() {
+        @Override public void run() { if (resumed) refreshApps(); }
+    };
+
+    /** Told by Android when an app is added, removed, updated or enabled/disabled. Costs nothing while idle (no polling). */
+    private final BroadcastReceiver packageReceiver = new BroadcastReceiver() {
+        @Override public void onReceive(Context context, Intent intent) {
+            // Enable/disable ("changed") is picked up by the next comparison; the others also drop the cached artwork.
+            if (!Intent.ACTION_PACKAGE_CHANGED.equals(intent.getAction()) && intent.getData() != null) {
+                catalog.invalidate(intent.getData().getSchemeSpecificPart());
+            }
+            dirty = true;
+            if (resumed) {   // wait a moment: installs often send several broadcasts in a row
+                handler.removeCallbacks(refreshTask);
+                handler.postDelayed(refreshTask, 400);
+            }
+        }
+    };
 
     // Dock geometry (Apple TV proportions: tile ~1.67:1, focused tile 1.2x, gap ~0.2 of tile width)
     private static final int TILE_W = 168;
@@ -65,21 +89,46 @@ public class LauncherActivity extends Activity {
                 View.SYSTEM_UI_FLAG_FULLSCREEN | View.SYSTEM_UI_FLAG_HIDE_NAVIGATION |
                 View.SYSTEM_UI_FLAG_IMMERSIVE_STICKY | View.SYSTEM_UI_FLAG_LAYOUT_STABLE |
                 View.SYSTEM_UI_FLAG_LAYOUT_HIDE_NAVIGATION | View.SYSTEM_UI_FLAG_LAYOUT_FULLSCREEN);
+        catalog = new AppCatalog(this);
         buildUi();
-        refreshApps(true);
+        refreshApps();
+        registerPackageReceiver();
         handler.post(clockTick);
     }
 
     @Override protected void onResume() {
         super.onResume();
-        refreshApps(false);
+        resumed = true;
+        if (dirty) refreshApps();   // only if an app changed while we were away; otherwise focus stays exactly where it was
         handler.removeCallbacks(clockTick);
         handler.post(clockTick);
     }
 
     @Override protected void onPause() {
         super.onPause();
+        resumed = false;
         handler.removeCallbacks(clockTick);
+        handler.removeCallbacks(refreshTask);
+    }
+
+    @Override protected void onDestroy() {
+        super.onDestroy();
+        if (receiverRegistered) {
+            unregisterReceiver(packageReceiver);
+            receiverRegistered = false;
+        }
+        handler.removeCallbacksAndMessages(null);
+    }
+
+    private void registerPackageReceiver() {
+        IntentFilter filter = new IntentFilter();
+        filter.addAction(Intent.ACTION_PACKAGE_ADDED);
+        filter.addAction(Intent.ACTION_PACKAGE_REMOVED);
+        filter.addAction(Intent.ACTION_PACKAGE_REPLACED);
+        filter.addAction(Intent.ACTION_PACKAGE_CHANGED);
+        filter.addDataScheme("package");
+        registerReceiver(packageReceiver, filter);
+        receiverRegistered = true;
     }
 
     @Override public void onBackPressed() { }
@@ -199,61 +248,50 @@ public class LauncherActivity extends Activity {
         setContentView(root);
     }
 
-    private void refreshApps(boolean requestFocus) {
-        List<ResolveInfo> found = new ArrayList<>();
-        PackageManager pm = getPackageManager();
-        Intent launcher = new Intent(Intent.ACTION_MAIN);
-        launcher.addCategory(Intent.CATEGORY_LAUNCHER);
-        addUnique(found, pm.queryIntentActivities(launcher, 0));
-        Intent leanback = new Intent(Intent.ACTION_MAIN);
-        leanback.addCategory("android.intent.category.LEANBACK_LAUNCHER");
-        addUnique(found, pm.queryIntentActivities(leanback, 0));
-        Collections.sort(found, new Comparator<ResolveInfo>() {
-            @Override public int compare(ResolveInfo a, ResolveInfo b) {
-                return String.CASE_INSENSITIVE_ORDER.compare(label(a), label(b));
-            }
-        });
+    /**
+     * Re-reads the installed apps and rebuilds the dock, but only if the list really changed.
+     * Focus is kept on the same app (or the nearest one) so returning from an app never throws you back to the start.
+     */
+    private void refreshApps() {
+        dirty = false;
+        List<AppCatalog.AppEntry> found = catalog.load();
+        if (listBuilt && found.equals(apps)) return;   // identical list: leave the views and the focus alone
+
+        // Remember where focus was before the old tiles are thrown away.
+        int focusedIndex = listBuilt ? indexOfFocusedTile() : -1;
+        AppCatalog.AppEntry focusedEntry =
+                focusedIndex >= 0 && focusedIndex < apps.size() ? apps.get(focusedIndex) : null;
+        boolean giveDockFocus = !listBuilt || focusedIndex >= 0 || getCurrentFocus() == null;
+
         apps = found;
+        listBuilt = true;
         dock.removeAllViews();
-        ResolveInfo first = null;
-        for (ResolveInfo info : apps) {
-            if (getPackageName().equals(info.activityInfo.packageName)) continue;
-            if (!isUsable(info)) continue;
-            if (first == null) first = info;
-            dock.addView(appTile(info));
-        }
-        if (first != null) select(first);
-        else {
+        for (AppCatalog.AppEntry entry : apps) dock.addView(appTile(entry));
+
+        if (apps.isEmpty()) {
             heroTitle.setText("HomingZone");
             heroSubtitle.setText("No apps found. Install an app to see it here.");
             heroIcon.setImageDrawable(null);
+            return;
         }
-        if (requestFocus && dock.getChildCount() > 0) dock.getChildAt(0).requestFocus();
+        int target = 0;
+        if (focusedEntry != null) {
+            int same = apps.indexOf(focusedEntry);
+            target = same >= 0 ? same : Math.min(focusedIndex, apps.size() - 1);   // app vanished: stay near it
+        }
+        if (giveDockFocus) dock.getChildAt(target).requestFocus();   // focus listener updates the hero
+        else select(apps.get(target));
     }
 
-    private void addUnique(List<ResolveInfo> target, List<ResolveInfo> incoming) {
-        Map<String, ResolveInfo> unique = new LinkedHashMap<>();
-        for (ResolveInfo r : target) unique.put(r.activityInfo.packageName, r);
-        for (ResolveInfo r : incoming) {
-            if (!unique.containsKey(r.activityInfo.packageName)) {
-                unique.put(r.activityInfo.packageName, r);
-            }
+    private int indexOfFocusedTile() {
+        for (int n = 0; n < dock.getChildCount(); n++) {
+            if (dock.getChildAt(n).hasFocus()) return n;
         }
-        target.clear();
-        target.addAll(unique.values());
-    }
-
-    private boolean isUsable(ResolveInfo info) {
-        return info != null
-                && info.activityInfo != null
-                && info.activityInfo.applicationInfo != null
-                && info.activityInfo.enabled
-                && info.activityInfo.applicationInfo.enabled;
+        return -1;
     }
 
     /** One Apple-TV-style app entry with artwork and its installed app name. */
-    private View appTile(final ResolveInfo info) {
-        final PackageManager pm = getPackageManager();
+    private View appTile(final AppCatalog.AppEntry app) {
         final int radius = dp(TILE_RADIUS);
 
         LinearLayout entry = new LinearLayout(this);
@@ -275,10 +313,7 @@ public class LauncherActivity extends Activity {
         tile.setClipToOutline(true);
 
         // Prefer the TV banner (wide artwork); fall back to a dark tile with the app icon centred.
-        Drawable banner = info.activityInfo.loadBanner(pm);
-        if (banner == null && info.activityInfo.applicationInfo != null) {
-            banner = info.activityInfo.applicationInfo.loadBanner(pm);
-        }
+        Drawable banner = app.newBanner();   // cached after the first load; null when the app has no banner
         ImageView art = new ImageView(this);
         if (banner != null) {
             art.setScaleType(ImageView.ScaleType.CENTER_CROP);
@@ -288,14 +323,14 @@ public class LauncherActivity extends Activity {
             tile.setBackground(new GradientDrawable(GradientDrawable.Orientation.TOP_BOTTOM,
                     new int[]{Color.rgb(44, 44, 48), Color.rgb(22, 22, 25)}));
             art.setScaleType(ImageView.ScaleType.FIT_CENTER);
-            art.setImageDrawable(info.loadIcon(pm));
+            art.setImageDrawable(app.newIcon());
             tile.addView(art, new FrameLayout.LayoutParams(dp(60), dp(60), Gravity.CENTER));
         }
 
         LinearLayout.LayoutParams tileLp = new LinearLayout.LayoutParams(dp(TILE_W), dp(TILE_H));
         tile.setLayoutParams(tileLp);
 
-        TextView name = text(label(info), 12, Color.argb(220, 255, 255, 255), false);
+        TextView name = text(app.label, 12, Color.argb(220, 255, 255, 255), false);
         name.setGravity(Gravity.CENTER);
         name.setMaxLines(1);
         name.setEllipsize(TextUtils.TruncateAt.END);
@@ -315,38 +350,31 @@ public class LauncherActivity extends Activity {
                     .translationZ(0)
                     .setDuration(160).start();
             if (focused) {
-                select(info);
+                select(app);
                 // Include extra room so the scaled tile is fully visible when scrolling.
                 final int pad = dp(30);
                 appScroll.post(() -> appScroll.requestChildRectangleOnScreen(dock,
                         new android.graphics.Rect(v.getLeft() - pad, 0, v.getRight() + pad, dock.getHeight()), false));
             }
         });
-        tile.setOnClickListener(v -> launch(info));
+        tile.setOnClickListener(v -> launch(app));
         return entry;
     }
 
-    private void select(ResolveInfo info) {
-        heroTitle.setText(label(info));
-        heroSubtitle.setText("Ready to open  ·  " + info.activityInfo.packageName);
-        heroIcon.setImageDrawable(info.loadIcon(getPackageManager()));
+    private void select(AppCatalog.AppEntry entry) {
+        heroTitle.setText(entry.label);
+        heroSubtitle.setText("Ready to open  ·  " + entry.packageName);
+        heroIcon.setImageDrawable(entry.newIcon());   // from the cache: no PackageManager call per key press
     }
 
-    private void launch(ResolveInfo info) {
-        Intent intent = getPackageManager().getLaunchIntentForPackage(info.activityInfo.packageName);
-        if (intent == null) {
-            intent = new Intent(Intent.ACTION_MAIN);
-            intent.addCategory(Intent.CATEGORY_LEANBACK_LAUNCHER);
-            intent.setPackage(info.activityInfo.packageName);
+    private void launch(AppCatalog.AppEntry entry) {
+        try {
+            startActivity(entry.launchIntent());
+        } catch (RuntimeException e) {   // ActivityNotFoundException, SecurityException, ...
+            Log.w(TAG, "Could not launch " + entry.packageName, e);
+            Toast.makeText(this, "Can't open " + entry.label, Toast.LENGTH_SHORT).show();
+            handler.post(refreshTask);   // the app may have just been removed: make sure the dock is current
         }
-        if (intent != null) {
-            intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
-            try { startActivity(intent); } catch (Exception ignored) { }
-        }
-    }
-
-    private String label(ResolveInfo info) {
-        return String.valueOf(info.loadLabel(getPackageManager()));
     }
 
     private TextView text(String value, float size, int color, boolean bold) {
