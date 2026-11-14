@@ -7,9 +7,16 @@ import android.bluetooth.BluetoothDevice;
 import android.content.ComponentName;
 import android.content.Context;
 import android.content.Intent;
+import android.graphics.Bitmap;
+import android.graphics.Canvas;
 import android.graphics.Color;
+import android.graphics.LinearGradient;
+import android.graphics.Paint;
 import android.graphics.PixelFormat;
 import android.graphics.Point;
+import android.graphics.PorterDuff;
+import android.graphics.PorterDuffXfermode;
+import android.graphics.Shader;
 import android.graphics.drawable.GradientDrawable;
 import android.media.AudioDeviceInfo;
 import android.media.AudioManager;
@@ -55,6 +62,57 @@ public final class ControlPanelOverlay {
     private static View memBarFill;
     private static android.graphics.Bitmap cachedSceneBlur;
     private static final Handler MAIN = new Handler(Looper.getMainLooper());
+
+    /** Fades the captured blur into the untouched screen as it moves away from the panel. */
+    private static final class GradientBlurView extends View {
+        private final Paint imagePaint = new Paint(Paint.ANTI_ALIAS_FLAG | Paint.FILTER_BITMAP_FLAG);
+        private final Paint maskPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
+        private final Paint shadePaint = new Paint(Paint.ANTI_ALIAS_FLAG);
+        private Bitmap bitmap;
+        private int fallbackColor = Color.TRANSPARENT;
+
+        GradientBlurView(Context context) {
+            super(context);
+            setLayerType(View.LAYER_TYPE_HARDWARE, null);
+        }
+
+        void setBitmap(Bitmap value) {
+            bitmap = value;
+            fallbackColor = Color.TRANSPARENT;
+            invalidate();
+        }
+
+        void setFallbackColor(int color) {
+            bitmap = null;
+            fallbackColor = color;
+            invalidate();
+        }
+
+        @Override protected void onDraw(Canvas canvas) {
+            super.onDraw(canvas);
+            float w = getWidth(), h = getHeight();
+            if (w <= 0 || h <= 0) return;
+            int save = canvas.saveLayer(0, 0, w, h, null);
+            if (bitmap != null && !bitmap.isRecycled()) {
+                canvas.drawBitmap(bitmap, null, new android.graphics.RectF(0, 0, w, h), imagePaint);
+            } else if (Color.alpha(fallbackColor) != 0) {
+                canvas.drawColor(fallbackColor);
+            }
+            maskPaint.setShader(new LinearGradient(0, 0, w * 0.82f, 0,
+                    0x00000000, Color.WHITE, Shader.TileMode.CLAMP));
+            maskPaint.setXfermode(new PorterDuffXfermode(PorterDuff.Mode.DST_IN));
+            canvas.drawRect(0, 0, w, h, maskPaint);
+            maskPaint.setXfermode(null);
+            maskPaint.setShader(null);
+            canvas.restoreToCount(save);
+
+            // The glass is strongest under the right-hand panel and eases away to clear.
+            shadePaint.setShader(new LinearGradient(w, 0, 0, 0,
+                    0x65000000, 0x00000000, Shader.TileMode.CLAMP));
+            canvas.drawRect(0, 0, w, h, shadePaint);
+            shadePaint.setShader(null);
+        }
+    }
     private static WindowManager inputsOverlayWm;
     private static FrameLayout inputsOverlayRoot;
     private static List<View> inputsOverlayCells = new ArrayList<>();
@@ -249,32 +307,28 @@ public final class ControlPanelOverlay {
         // Video is playing underneath (or will be): a static screenshot would freeze it, and DRM /
         // hardware-overlay video captures as pure black. Keep the live video visible instead.
         final boolean videoPlaying = liveBlurHolder[0] == null && isMediaPlaying(svcCtx);
-        final ImageView blurBg;
+        final GradientBlurView blurBg;
         if (blurryMode && !videoPlaying) {
-            blurBg = new ImageView(svcCtx);
-            blurBg.setScaleType(ImageView.ScaleType.FIT_XY);
-            if (liveBlurHolder[0] != null) {
-                blurBg.setImageBitmap(liveBlurHolder[0]);
-            } else {
-                blurBg.setBackgroundColor(0x780B0D14);
-            }
-            blurBg.setColorFilter(0x74000000, android.graphics.PorterDuff.Mode.SRC_OVER);
+            blurBg = new GradientBlurView(svcCtx);
+            if (liveBlurHolder[0] != null) blurBg.setBitmap(liveBlurHolder[0]);
+            else blurBg.setFallbackColor(0x780B0D14);
             layer.addView(blurBg, new FrameLayout.LayoutParams(
                     ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
         } else if (blurryMode) {
             // Live video stays playing behind; a soft scrim toward the panel keeps tiles legible.
-            // FLAG_BLUR_BEHIND (below) additionally blurs the live video on devices that support it.
             blurBg = null;
             View shade = new View(svcCtx);
             shade.setBackground(new GradientDrawable(
                     GradientDrawable.Orientation.RIGHT_LEFT,
-                    new int[]{0x8C000000, 0x4D000000, 0x26000000}));
+                    new int[]{0x8C000000, 0x3D000000, 0x00000000}));
             layer.addView(shade, new FrameLayout.LayoutParams(
                     ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
         } else {
             blurBg = null;
             View shade = new View(svcCtx);
-            shade.setBackgroundColor(0x36000000);
+            shade.setBackground(new GradientDrawable(
+                    GradientDrawable.Orientation.RIGHT_LEFT,
+                    new int[]{0x55000000, 0x22000000, 0x00000000}));
             layer.addView(shade, new FrameLayout.LayoutParams(
                     ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
         }
@@ -314,9 +368,6 @@ public final class ControlPanelOverlay {
 
         int flags = WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN
                 | WindowManager.LayoutParams.FLAG_WATCH_OUTSIDE_TOUCH;
-        if (blurryMode && android.os.Build.VERSION.SDK_INT >= 31) {
-            flags |= WindowManager.LayoutParams.FLAG_BLUR_BEHIND;
-        }
         WindowManager.LayoutParams wlp = new WindowManager.LayoutParams(
                 WindowManager.LayoutParams.MATCH_PARENT,
                 WindowManager.LayoutParams.MATCH_PARENT,
@@ -324,12 +375,6 @@ public final class ControlPanelOverlay {
                 flags,
                 PixelFormat.TRANSLUCENT);
         wlp.gravity = Gravity.TOP | Gravity.END;
-        if (blurryMode && android.os.Build.VERSION.SDK_INT >= 31) {
-            try {
-                wlp.setBlurBehindRadius(dp(unit, 48));
-            } catch (Throwable ignored) {}
-        }
-
         wm.addView(layer, wlp);
         activeWm = wm;
         activeRoot = layer;
@@ -357,8 +402,7 @@ public final class ControlPanelOverlay {
                 if (activeRoot != layer) return;
                 if (blurred != null && blurBg != null && !isMostlyBlack(blurred)) {
                     liveBlurHolder[0] = blurred;
-                    blurBg.setBackgroundColor(Color.TRANSPARENT);
-                    blurBg.setImageBitmap(blurred);
+                    blurBg.setBitmap(blurred);
                     for (int i = 0; i < cells.size(); i++) {
                         cells.get(i).invalidate();
                     }
@@ -366,11 +410,7 @@ public final class ControlPanelOverlay {
                     // Protected / hardware-overlay video captures as black: show the live video
                     // through a soft scrim instead of covering it with a black frame.
                     if (blurred != null) blurred.recycle();
-                    blurBg.setImageDrawable(null);
-                    blurBg.clearColorFilter();
-                    blurBg.setBackground(new GradientDrawable(
-                            GradientDrawable.Orientation.RIGHT_LEFT,
-                            new int[]{0x8C000000, 0x4D000000, 0x26000000}));
+                    blurBg.setFallbackColor(0x780B0D14);
                 }
                 revealNow.run();
             });

@@ -278,50 +278,10 @@ final class SceneHome {
         topRightRow.addView(whoBar, wlp);
         refreshWhoBar();
 
-        // Top-right Weather Shortcut Button (icon only; opens 5-day forecast UI like Classic Home)
+        // Weather is no longer shown as a home-screen widget or shortcut.
         int mSize = dp(42);
         weatherBtn = new LinearLayout(host);
-        weatherBtn.setOrientation(LinearLayout.HORIZONTAL);
-        weatherBtn.setGravity(Gravity.CENTER);
-        MainActivity.LiquidGlass weatherGlass = new MainActivity.LiquidGlass(
-                mSize / 2f, 0x6614161C, host.glassSource, host.screenW, host.screenH, host.unit);
-        weatherGlass.lens = dp(5);
-        weatherGlass.rimStrength = 0.45f;
-        weatherBtn.setBackground(weatherGlass);
-        weatherBtn.setFocusable(true);
-        weatherBtn.setClickable(true);
-        weatherBtn.setLongClickable(true);
-
-        weatherIcon = new ImageView(host);
-        weatherIcon.setImageBitmap(Glyphs.get("cloud", dp(19), 0xFFF4F4F6));
-        weatherBtn.addView(weatherIcon, new LinearLayout.LayoutParams(dp(19), dp(19)));
-
-        GradientDrawable weatherFocusRing = new GradientDrawable();
-        weatherFocusRing.setCornerRadius(mSize / 2f);
-        weatherFocusRing.setColor(Color.TRANSPARENT);
-        weatherFocusRing.setStroke(dp(2), Color.WHITE);
-
-        weatherBtn.setOnFocusChangeListener((v, has) -> {
-            v.setForeground(has ? weatherFocusRing : null);
-            v.animate().scaleX(has ? 1.08f : 1f).scaleY(has ? 1.08f : 1f)
-                    .setDuration(180).setInterpolator(MainActivity.LIFT).start();
-            if (has) {
-                hideShelf();
-                showDashboard();
-            } else {
-                overlay.post(this::syncDashboardIfFocusChanged);
-            }
-        });
-        weatherBtn.setOnClickListener(v -> host.showWeather());
-        weatherBtn.setOnLongClickListener(v -> {
-            host.showWeather();
-            return true;
-        });
-
-        LinearLayout.LayoutParams wxlp = new LinearLayout.LayoutParams(mSize, mSize);
-        wxlp.rightMargin = dp(10);
-        topRightRow.addView(weatherBtn, wxlp);
-        refreshWeatherBtn();
+        weatherBtn.setVisibility(View.GONE);
 
         // Top-right Control Panel Button
         moonBtn = new LinearLayout(host);
@@ -419,8 +379,7 @@ final class SceneHome {
 
     void refreshWeatherBtn() {
         if (weatherBtn == null) return;
-        boolean show = isWeatherShortcutEnabled(host) && Weather.enabled(host);
-        weatherBtn.setVisibility(show ? View.VISIBLE : View.GONE);
+        weatherBtn.setVisibility(View.GONE);
     }
 
     void refreshMoonBtn() {
@@ -2396,7 +2355,7 @@ final class SceneHome {
         }
         card.addView(pillsRow);
 
-        // Quick shortcuts row below Sleep Timer pills: Control Center, Search, Weather
+        // Quick shortcuts row below Sleep Timer pills.
         LinearLayout quickRow = new LinearLayout(host);
         quickRow.setOrientation(LinearLayout.HORIZONTAL);
         LinearLayout.LayoutParams qrlp = new LinearLayout.LayoutParams(
@@ -2412,17 +2371,10 @@ final class SceneHome {
             closeSheet();
             host.showSearch(null);
         });
-        View weatherShortcut = makeQuickChip(I18n.s(host, "Weather Forecast", "Hava Durumu"), () -> {
-            closeSheet();
-            host.showWeather();
-        });
         quickRow.addView(ccShortcut, new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f));
         LinearLayout.LayoutParams s2lp = new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f);
         s2lp.leftMargin = dp(8);
         quickRow.addView(searchShortcut, s2lp);
-        LinearLayout.LayoutParams s3lp = new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f);
-        s3lp.leftMargin = dp(8);
-        quickRow.addView(weatherShortcut, s3lp);
 
         FrameLayout.LayoutParams clp = new FrameLayout.LayoutParams(
                 ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT, Gravity.CENTER);

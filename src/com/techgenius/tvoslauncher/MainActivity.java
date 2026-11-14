@@ -415,6 +415,7 @@ public class MainActivity extends Activity {
         }
         resumed = true;
         activeInstance = this;
+        watchNetwork();
         clearLaunchDim();
         boolean wasReturningFromSettings = returningFromSettings;
         if (!Scenes.isScenesLook(this)) {
@@ -684,6 +685,7 @@ public class MainActivity extends Activity {
 
         // Classic Big Clock Weather Shortcut button in top-right status row (when Big Clock is enabled on Classic look)
         classicWeatherButton = new ImageView(this);
+        classicWeatherButton.setVisibility(View.GONE);
         classicWeatherButton.setScaleType(ImageView.ScaleType.CENTER);
         classicWeatherButton.setImageBitmap(Glyphs.get("cloud", dp(19), Color.WHITE));
         LiquidGlass cwxGlass = new LiquidGlass(btn / 2f, 0x1F000000, glassSource, screenW, screenH, unit).adaptive();
@@ -815,32 +817,11 @@ public class MainActivity extends Activity {
         root.addView(clockBox, clp);
 
 
-        // Keep the forecast model available to existing weather flows without placing a card on
-        // the home screen. Forecasts remain reachable from the weather shortcut.
+        // Keep the forecast model available to existing weather flows without showing a widget.
         weatherCard = new WeatherView(this, false, unit);
         weatherCard.setVisibility(View.GONE);
-
         weatherShortcutIcon = new ImageView(this);
-        weatherShortcutIcon.setImageBitmap(Glyphs.get("cloud", dp(20), Color.WHITE));
-        weatherShortcutGlass = new LiquidGlass(dp(18), 0x2E000000, glassSource, screenW, screenH, unit).adaptive();
-        weatherShortcutGlass.lens = dp(4);
-        weatherShortcutIcon.setBackground(weatherShortcutGlass);
-        weatherShortcutIcon.setFocusable(true);
-        weatherShortcutIcon.setClickable(true);
-        weatherShortcutIcon.setContentDescription("Weather");
-        weatherShortcutIcon.setOnFocusChangeListener((v, has) -> {
-            weatherShortcutGlass.setLit(has);
-            weatherShortcutIcon.setImageBitmap(Glyphs.get("cloud", dp(20), has ? 0xFF111114 : Color.WHITE));
-            v.animate().scaleX(has ? 1.12f : 1f).scaleY(has ? 1.12f : 1f)
-                    .setDuration(180).setInterpolator(LIFT).start();
-            if (has) onClassicNonAppFocused();
-        });
-        weatherShortcutIcon.setOnClickListener(v -> showWeather());
-        FrameLayout.LayoutParams wip = new FrameLayout.LayoutParams(dp(36), dp(36),
-                Gravity.TOP | Gravity.START);
-        wip.topMargin = dp(24);
-        wip.leftMargin = dockOuter;
-        root.addView(weatherShortcutIcon, wip);
+        weatherShortcutIcon.setVisibility(View.GONE);
         root.addView(sceneHome.overlay, match());
 
         launchDimView = new View(this) {
@@ -868,10 +849,11 @@ public class MainActivity extends Activity {
             // Keep the network status visible in the top row even when the large home clock is on.
             timeChipView.setVisibility(View.VISIBLE);
         }
+        if (netIcon != null) netIcon.setVisibility(View.VISIBLE);
         if (statusClock != null) {
             statusClock.setVisibility(bigClock ? View.GONE : View.VISIBLE);
         }
-        boolean showWxShortcut = bigClock && SceneHome.isWeatherShortcutEnabled(this) && Weather.enabled(this);
+        boolean showWxShortcut = false;
         if (classicWeatherButton != null) {
             classicWeatherButton.setVisibility(showWxShortcut ? View.VISIBLE : View.GONE);
         }
@@ -880,7 +862,7 @@ public class MainActivity extends Activity {
             weatherCard.setVisibility(View.GONE);
         }
         if (weatherShortcutIcon != null) {
-            weatherShortcutIcon.setVisibility(Weather.enabled(this) ? View.VISIBLE : View.GONE);
+            weatherShortcutIcon.setVisibility(View.GONE);
         }
         if (sceneHome != null) {
             if (wallView != null && wallView.getDrawable() instanceof BitmapDrawable) {
@@ -4476,7 +4458,9 @@ public class MainActivity extends Activity {
     void updateNet() {
         if (netIcon == null) return;
         android.net.ConnectivityManager cm = getSystemService(android.net.ConnectivityManager.class);
-        android.net.NetworkCapabilities nc = cm.getNetworkCapabilities(cm.getActiveNetwork());
+        if (cm == null) return;
+        android.net.Network activeNetwork = cm.getActiveNetwork();
+        android.net.NetworkCapabilities nc = activeNetwork == null ? null : cm.getNetworkCapabilities(activeNetwork);
         int state = nc == null ? 0
                 : nc.hasCapability(android.net.NetworkCapabilities.NET_CAPABILITY_VALIDATED) ? 2 : 1;
         boolean eth = nc != null && nc.hasTransport(android.net.NetworkCapabilities.TRANSPORT_ETHERNET);
@@ -4893,15 +4877,11 @@ public class MainActivity extends Activity {
         Weather.Data d = Weather.enabled(this) ? Weather.cached(this) : null;
         if (sceneHome != null) {
             sceneHome.refreshWeatherBtn();
-            if (d != null) {
-                sceneHome.sceneView.setWeather(d.temp + "\u00b0", Weather.describe(this, d.code, d.day), d.code);
-            } else {
-                sceneHome.sceneView.setWeather(null, null, -1);
-            }
+            sceneHome.sceneView.setWeather(null, null, -1);
         }
         boolean bigClock = !Scenes.isScenesLook(this) && Scenes.isClassicBigClockEnabled(this);
         if (classicWeatherButton != null) {
-            boolean showShortcut = bigClock && SceneHome.isWeatherShortcutEnabled(this) && Weather.enabled(this);
+            boolean showShortcut = false;
             classicWeatherButton.setVisibility(showShortcut ? View.VISIBLE : View.GONE);
         }
         boolean show = false;
@@ -4909,8 +4889,7 @@ public class MainActivity extends Activity {
         weatherCard.setVisibility(View.GONE);
         weatherCard.setData(d);
         if (weatherShortcutIcon != null) {
-            weatherShortcutIcon.setVisibility(Weather.enabled(this) && !Scenes.isScenesLook(this)
-                    ? View.VISIBLE : View.GONE);
+            weatherShortcutIcon.setVisibility(View.GONE);
             if (weatherShortcutIcon.getVisibility() == View.VISIBLE
                     && launchOverlay == null) weatherShortcutIcon.setAlpha(weatherAlpha());
         }
@@ -4942,7 +4921,7 @@ public class MainActivity extends Activity {
             popoverReturn = classicWeatherButton;
             rightSide = true;
         } else {
-            popoverReturn = weatherShortcutIcon;
+            popoverReturn = ccButton;
         }
         FrameLayout layer = new FrameLayout(this);
         layer.setClickable(true);
