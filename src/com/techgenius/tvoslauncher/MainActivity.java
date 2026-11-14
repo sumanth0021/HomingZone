@@ -665,7 +665,8 @@ public class MainActivity extends Activity {
         time.setAllCaps(true);
         // Internet status, left of the time: white when online, orange when there is no internet.
         netIcon = new ImageView(this);
-        LinearLayout.LayoutParams nlp = new LinearLayout.LayoutParams(dp(24), dp(20));
+        netIcon.setScaleType(ImageView.ScaleType.CENTER_INSIDE);
+        LinearLayout.LayoutParams nlp = new LinearLayout.LayoutParams(dp(28), dp(24));
         nlp.rightMargin = dp(8);
         // Liquid Glass capsule behind the network icon and time, matching the top-right glass buttons.
         LinearLayout timeChip = new LinearLayout(this);
@@ -864,7 +865,11 @@ public class MainActivity extends Activity {
         }
         boolean bigClock = Scenes.isClassicBigClockEnabled(this);
         if (timeChipView != null) {
-            timeChipView.setVisibility(bigClock ? View.GONE : View.VISIBLE);
+            // Keep the network status visible in the top row even when the large home clock is on.
+            timeChipView.setVisibility(View.VISIBLE);
+        }
+        if (statusClock != null) {
+            statusClock.setVisibility(bigClock ? View.GONE : View.VISIBLE);
         }
         boolean showWxShortcut = bigClock && SceneHome.isWeatherShortcutEnabled(this) && Weather.enabled(this);
         if (classicWeatherButton != null) {

@@ -6,7 +6,6 @@ import android.content.pm.PackageManager;
 import android.graphics.Bitmap;
 import android.graphics.Color;
 import android.graphics.drawable.GradientDrawable;
-import android.net.Uri;
 import android.os.Bundle;
 import android.view.Gravity;
 import android.view.View;
@@ -24,7 +23,7 @@ import java.util.List;
 /** TV friendly home settings with a visual wallpaper picker. */
 public final class SettingsActivity extends Activity {
 
-    private static final int PICK_WALLPAPER = 42;
+    private static final int REQ_WALLPAPER_STORAGE = 43;
     private static final String DEFAULT_WALLPAPER = "photo:tessellated-pavement.jpg";
     private final java.util.ArrayList<View> presetCards = new java.util.ArrayList<>();
     private String selectedWallpaper;
@@ -227,22 +226,35 @@ public final class SettingsActivity extends Activity {
     }
 
     private void chooseWallpaper() {
-        Intent pick = new Intent(Intent.ACTION_OPEN_DOCUMENT);
-        pick.addCategory(Intent.CATEGORY_OPENABLE);
-        pick.setType("image/*");
-        startActivityForResult(pick, PICK_WALLPAPER);
+        String permission = android.os.Build.VERSION.SDK_INT >= 33
+                ? "android.permission.READ_MEDIA_IMAGES"
+                : "android.permission.READ_EXTERNAL_STORAGE";
+        if (android.os.Build.VERSION.SDK_INT >= 23
+                && checkSelfPermission(permission) != PackageManager.PERMISSION_GRANTED) {
+            requestPermissions(new String[]{permission}, REQ_WALLPAPER_STORAGE);
+            return;
+        }
+        showWallpaperBrowser();
+    }
+
+    private void showWallpaperBrowser() {
+        CustomMedia.showImageFilePicker(this, "Choose wallpaper", false, 1920, 1080,
+                null, null, this::applyPickedWallpaper);
     }
 
     @Override
-    protected void onActivityResult(int requestCode, int resultCode, Intent data) {
-        super.onActivityResult(requestCode, resultCode, data);
-        if (requestCode != PICK_WALLPAPER || resultCode != RESULT_OK || data == null || data.getData() == null) return;
-        Uri uri = data.getData();
+    public void onRequestPermissionsResult(int requestCode, String[] permissions, int[] grantResults) {
+        super.onRequestPermissionsResult(requestCode, permissions, grantResults);
+        if (requestCode == REQ_WALLPAPER_STORAGE) {
+            // The browser also offers Android's picker as a fallback if access is declined.
+            showWallpaperBrowser();
+        }
+    }
+
+    private void applyPickedWallpaper(Bitmap bitmap) {
         try {
-            Bitmap bitmap = CustomMedia.decodeImageOrIcoFromUri(this, uri, 1920, 1080);
             if (bitmap == null) throw new IllegalArgumentException("Unsupported or unreadable image");
             if (!CustomMedia.setCustomClassicWallpaper(this, bitmap)) throw new IllegalStateException("Could not save wallpaper");
-            bitmap.recycle();
             CustomMedia.setCustomWallpaperEnabled(this, CustomMedia.SCOPE_CLASSIC, true);
             selectedWallpaper = MainActivity.CUSTOM_WALL_KEY;
             Profiles.homePrefs(this).edit().putString("wallpaper", selectedWallpaper).apply();
@@ -250,7 +262,15 @@ public final class SettingsActivity extends Activity {
             finish();
         } catch (Exception e) {
             Toast.makeText(this, "Wallpaper could not be applied", Toast.LENGTH_LONG).show();
+        } finally {
+            if (bitmap != null && !bitmap.isRecycled()) bitmap.recycle();
         }
+    }
+
+    @Override
+    protected void onActivityResult(int requestCode, int resultCode, Intent data) {
+        super.onActivityResult(requestCode, resultCode, data);
+        CustomMedia.onActivityResult(requestCode, resultCode, data);
     }
 
     private int installedLaunchableAppCount() {
