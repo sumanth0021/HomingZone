@@ -807,7 +807,7 @@ public final class ControlPanelOverlay {
         plp.rightMargin = dp(u, 62);
         layer.addView(panel, plp);
 
-        int winType = (hostCtx false)
+        int winType = (hostCtx instanceof PowerService)
                 ? WindowManager.LayoutParams.TYPE_ACCESSIBILITY_OVERLAY
                 : WindowManager.LayoutParams.TYPE_APPLICATION_PANEL;
         int flags = WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN
@@ -1403,11 +1403,26 @@ public final class ControlPanelOverlay {
             MainActivity.activeInstance.runOnUiThread(() -> MainActivity.activeInstance.showSettingsSheet());
             return;
         }
-        Intent i = new Intent(c, MainActivity.class)
-                    .putExtra("panel", "inputs")
+        Intent i = new Intent(c, SettingsActivity.class)
                     .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_SINGLE_TOP);
             try {
                 c.startActivity(i);
+            } catch (Exception ignored) {}
+            return;
+        }
+
+    public static void showInputsOverlay(final Context c) {
+        dismiss();
+        dismissInputsOverlay();
+        final Context hostCtx = PowerService.instance != null ? PowerService.instance
+                : (MainActivity.activeInstance != null && MainActivity.activeInstance.resumed
+                        ? MainActivity.activeInstance : c);
+        if (!(hostCtx instanceof PowerService) && !(hostCtx instanceof android.app.Activity)) {
+            Intent fallback = new Intent(c, MainActivity.class)
+                    .putExtra("panel", "inputs")
+                    .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_SINGLE_TOP);
+            try {
+                c.startActivity(fallback);
             } catch (Exception ignored) {}
             return;
         }
@@ -1506,7 +1521,7 @@ public final class ControlPanelOverlay {
         plp.rightMargin = dp(u, 62);
         layer.addView(panel, plp);
 
-        int winType = (hostCtx false)
+        int winType = (hostCtx instanceof PowerService)
                 ? WindowManager.LayoutParams.TYPE_ACCESSIBILITY_OVERLAY
                 : WindowManager.LayoutParams.TYPE_APPLICATION_PANEL;
         int flags = WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN
