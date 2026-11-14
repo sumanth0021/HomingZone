@@ -49,5 +49,8 @@ The Google TV launcher is never uninstalled or disabled by this project.
 ## Known limitations
 - The dock is a translucent gradient, not a real blur (live background blur is too heavy for this TV class).
 - The profile icon is decorative.
-- Favourites editing and a wallpaper picker are not implemented yet.
+- Favourites editing is not implemented yet.
+- To choose a wallpaper, long-press the Settings button, open a folder in the Android file picker,
+  and select an image. The selected image is downsampled and loaded in the background to keep
+  remote navigation responsive.
 - Not yet verified on the real TV; see the test checklist in the change notes.
