@@ -1,12 +1,12 @@
 $ErrorActionPreference = "Stop"
 Set-Location $PSScriptRoot
 
-if (-not $env:JAVA_HOME) {
-    $jdkCandidate = "C:\Users\asen4\AppData\Local\Programs\Microsoft\jdk-17.0.10.7-hotspot"
-    if (Test-Path $jdkCandidate) {
-        $env:JAVA_HOME = $jdkCandidate
+function Require-File([string] $Path, [string] $Message) {
+    if (-not (Test-Path -LiteralPath $Path -PathType Leaf)) {
+        throw $Message
     }
 }
+
 if ($env:JAVA_HOME) {
     $env:PATH = "$env:JAVA_HOME\bin;$env:PATH"
 }
@@ -14,6 +14,28 @@ if ($env:JAVA_HOME) {
 $SDK = if ($env:ANDROID_HOME) { $env:ANDROID_HOME } elseif ($env:ANDROID_SDK_ROOT) { $env:ANDROID_SDK_ROOT } else { "$env:LOCALAPPDATA\Android\Sdk" }
 $BT = "$SDK\build-tools\34.0.0"
 $JAR = "$SDK\platforms\android-34\android.jar"
+
+Require-File "$BT\aapt2.exe" "Android SDK build-tools 34.0.0 are missing. Install build-tools;34.0.0 or set ANDROID_HOME/ANDROID_SDK_ROOT."
+Require-File "$BT\d8.bat" "Android SDK build-tools 34.0.0 are missing. Install build-tools;34.0.0 or set ANDROID_HOME/ANDROID_SDK_ROOT."
+Require-File "$BT\zipalign.exe" "Android SDK build-tools 34.0.0 are missing. Install build-tools;34.0.0 or set ANDROID_HOME/ANDROID_SDK_ROOT."
+Require-File "$BT\apksigner.bat" "Android SDK build-tools 34.0.0 are missing. Install build-tools;34.0.0 or set ANDROID_HOME/ANDROID_SDK_ROOT."
+Require-File $JAR "Android SDK platform android-34 is missing. Install platforms;android-34 or set ANDROID_HOME/ANDROID_SDK_ROOT."
+if (-not (Get-Command javac.exe -ErrorAction SilentlyContinue)) {
+    throw "javac was not found. Install JDK 17 or newer and set JAVA_HOME."
+}
+if (-not (Get-Command jar.exe -ErrorAction SilentlyContinue)) {
+    throw "jar was not found. Install JDK 17 or newer and set JAVA_HOME."
+}
+if (-not (Get-Command keytool.exe -ErrorAction SilentlyContinue)) {
+    throw "keytool was not found. Install JDK 17 or newer and set JAVA_HOME."
+}
+$javaVersion = (& javac -version 2>&1) -join " "
+if ($javaVersion -notmatch "javac\s+(\d+)") {
+    throw "Unable to determine javac version. Install JDK 17 or newer and set JAVA_HOME."
+}
+if ([int]$Matches[1] -lt 17) {
+    throw "JDK 17 or newer is required; found $javaVersion."
+}
 
 if (Test-Path "build") { Get-ChildItem -Path "build" | Remove-Item -Recurse -Force }
 New-Item -ItemType Directory -Force -Path "build\gen", "build\classes", "build\dex" | Out-Null
