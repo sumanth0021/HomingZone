@@ -49,7 +49,8 @@ if ($LASTEXITCODE -ne 0) { throw "aapt2 compile failed" }
 if ($LASTEXITCODE -ne 0) { throw "aapt2 link failed" }
 
 $javaFiles = Get-ChildItem -Recurse -Path src, build\gen -Filter "*.java" | Select-Object -ExpandProperty FullName
-$javaFiles | Out-File -Encoding ascii build\sources.txt
+$root = (Get-Location).Path
+$javaFiles | ForEach-Object { $_.Substring($root.Length + 1) } | Out-File -Encoding ascii build\sources.txt
 & javac -encoding UTF-8 --release 11 -classpath "$JAR" -d build\classes "@build\sources.txt"
 if ($LASTEXITCODE -ne 0) { throw "javac failed" }
 

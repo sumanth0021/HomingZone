@@ -38,16 +38,14 @@ import java.util.List;
 import java.util.Set;
 
 /**
- * System-wide Control Panel overlay that can be displayed over ANY app using
- * {@link WindowManager.LayoutParams#TYPE_ACCESSIBILITY_OVERLAY} when {@link PowerService} is active,
- * or inside {@link MainActivity} when on the Home Screen.
+ * Control Panel overlay displayed inside the launcher activity.
  *
  * Layout order:
  * 1. Wi-Fi          | 2. Bluetooth
  * 3. Memory         | 4. Do Not Disturb
  * 5. Audio          | 6. Sleep Timer
  * 7. Ambient Mode   | 8. Power Off
- * 9..12. 1x1 Icons: Inputs, Button Mapper, Settings, Search
+ * 9..11. 1x1 Icons: Inputs, Settings, Search
  */
 public final class ControlPanelOverlay {
 
@@ -57,6 +55,9 @@ public final class ControlPanelOverlay {
     private static View memBarFill;
     private static android.graphics.Bitmap cachedSceneBlur;
     private static final Handler MAIN = new Handler(Looper.getMainLooper());
+    private static WindowManager inputsOverlayWm;
+    private static FrameLayout inputsOverlayRoot;
+    private static List<View> inputsOverlayCells = new ArrayList<>();
 
     public interface Status {
         String get();
@@ -66,6 +67,19 @@ public final class ControlPanelOverlay {
 
     public static boolean isShowing() {
         return activeRoot != null;
+    }
+
+    public static void dismissInputsOverlay() {
+        if (inputsOverlayRoot == null || inputsOverlayWm == null) return;
+        FrameLayout root = inputsOverlayRoot;
+        WindowManager wm = inputsOverlayWm;
+        inputsOverlayRoot = null;
+        inputsOverlayWm = null;
+        inputsOverlayCells.clear();
+        try {
+            wm.removeViewImmediate(root);
+        } catch (Exception ignored) {
+        }
     }
 
     public static void toggle(Context c) {
@@ -284,11 +298,6 @@ public final class ControlPanelOverlay {
                 },
                 () -> {
                     dismiss();
-                    startExternal(svcCtx, new Intent(svcCtx, SettingsActivity.class)
-                            .putExtra("page", SettingsActivity.BUTTON_MAPPER));
-                },
-                () -> {
-                    dismiss();
                     showSettingsGearPopupOverlay(svcCtx);
                 },
                 () -> {
@@ -424,7 +433,6 @@ public final class ControlPanelOverlay {
             MainActivity.LiquidGlass.Backdrop glassSource,
             List<View> outCells,
             Runnable onInputs,
-            Runnable onButtonMapper,
             Runnable onSettings,
             Runnable onSearch) {
 
@@ -524,9 +532,9 @@ public final class ControlPanelOverlay {
         int capsuleRows = (capsules.size() + 1) / 2;
         int y4 = capsuleRows > 0 ? capsuleRows * (cap + gap) : 0;
 
-        String[] itemKeys = {ITEM_INPUTS, ITEM_MAPPER, ITEM_SETTINGS, ITEM_SEARCH};
-        String[] icons = {"input", "remote", "gear", "search"};
-        Runnable[] actions = {onInputs, onButtonMapper, onSettings, onSearch};
+        String[] itemKeys = {ITEM_INPUTS, ITEM_SETTINGS, ITEM_SEARCH};
+        String[] icons = {"input", "gear", "search"};
+        Runnable[] actions = {onInputs, onSettings, onSearch};
         List<Integer> enabledSmallIdx = new ArrayList<>();
         for (int i = 0; i < itemKeys.length; i++) {
             if (isItemEnabled(c, itemKeys[i])) {
@@ -807,9 +815,7 @@ public final class ControlPanelOverlay {
         plp.rightMargin = dp(u, 62);
         layer.addView(panel, plp);
 
-        int winType = (hostCtx instanceof PowerService)
-                ? WindowManager.LayoutParams.TYPE_ACCESSIBILITY_OVERLAY
-                : WindowManager.LayoutParams.TYPE_APPLICATION_PANEL;
+        int winType = WindowManager.LayoutParams.TYPE_APPLICATION_PANEL;
         int flags = WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN
                 | WindowManager.LayoutParams.FLAG_WATCH_OUTSIDE_TOUCH;
         if (isBlurryBgMode(hostCtx) && android.os.Build.VERSION.SDK_INT >= 31) {
@@ -1216,7 +1222,6 @@ public final class ControlPanelOverlay {
     public static final String ITEM_AMBIENT = "ambient";
     public static final String ITEM_POWER = "power";
     public static final String ITEM_INPUTS = "inputs";
-    public static final String ITEM_MAPPER = "mapper";
     public static final String ITEM_SETTINGS = "settings";
     public static final String ITEM_SEARCH = "search";
     public static final String ITEM_WEATHER_PANEL = "weather_panel";
@@ -1231,7 +1236,6 @@ public final class ControlPanelOverlay {
         {ITEM_AMBIENT, "Ambient Mode / Lock Screen", "Ortam Modu / Kilit Ekrani"},
         {ITEM_POWER, "Power Off / Screen Off", "Kapat / Ekrani Kapat"},
         {ITEM_INPUTS, "TV Inputs Shortcut", "TV Girisleri Kisayolu"},
-        {ITEM_MAPPER, "Button Mapper Shortcut", "Tus Atayici Kisayolu"},
         {ITEM_SETTINGS, "Settings Shortcut", "Ayarlar Kisayolu"},
         {ITEM_SEARCH, "Search / Assistant Shortcut", "Arama / Asistan Kisayolu"},
         {ITEM_WEATHER_PANEL, "Weather Panel (Current & Tomorrow)", "Hava Durumu Paneli (Simdi ve Yarin)"}
@@ -1414,10 +1418,8 @@ public final class ControlPanelOverlay {
     public static void showInputsOverlay(final Context c) {
         dismiss();
         dismissInputsOverlay();
-        final Context hostCtx = PowerService.instance != null ? PowerService.instance
-                : (MainActivity.activeInstance != null && MainActivity.activeInstance.resumed
-                        ? MainActivity.activeInstance : c);
-        if (!(hostCtx instanceof PowerService) && !(hostCtx instanceof android.app.Activity)) {
+        final Context hostCtx = c instanceof android.app.Activity ? c : null;
+        if (hostCtx == null) {
             Intent fallback = new Intent(c, MainActivity.class)
                     .putExtra("panel", "inputs")
                     .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_SINGLE_TOP);
@@ -1521,9 +1523,7 @@ public final class ControlPanelOverlay {
         plp.rightMargin = dp(u, 62);
         layer.addView(panel, plp);
 
-        int winType = (hostCtx instanceof PowerService)
-                ? WindowManager.LayoutParams.TYPE_ACCESSIBILITY_OVERLAY
-                : WindowManager.LayoutParams.TYPE_APPLICATION_PANEL;
+        int winType = WindowManager.LayoutParams.TYPE_APPLICATION_PANEL;
         int flags = WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN
                 | WindowManager.LayoutParams.FLAG_WATCH_OUTSIDE_TOUCH;
         if (isBlurryBgMode(hostCtx) && android.os.Build.VERSION.SDK_INT >= 31) {
@@ -1549,6 +1549,16 @@ public final class ControlPanelOverlay {
             panel.animate().translationY(0).setDuration(260).setInterpolator(MainActivity.EASE).start();
             if (!cells.isEmpty()) cells.get(0).requestFocus();
         } catch (Exception ignored) {}
+    }
+
+    private static Inputs.Input makeFallbackInput(String id, String label, int type) {
+        Inputs.Input input = new Inputs.Input();
+        input.id = id;
+        input.label = label;
+        input.type = type;
+        input.passthrough = !"tv_channels".equals(id);
+        input.disconnected = false;
+        return input;
     }
 
     private static void moveFocusInCellList(List<View> cellList, int keyCode) {

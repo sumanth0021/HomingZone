@@ -4130,15 +4130,6 @@ public class MainActivity extends Activity {
                     ControlPanelOverlay.openInputs(this, () -> showInputs(popoverReturn != null ? popoverReturn : ccButton));
                 },
                 () -> {
-                    dropPicker();
-                    pickerLayer = null;
-                    popoverReturn = null;
-                    weatherOpen = false;
-                    returningFromSettings = true;
-                    startActivity(new Intent(this, SettingsActivity.class)
-                            .putExtra("page", SettingsActivity.BUTTON_MAPPER));
-                },
-                () -> {
                     View ret = popoverReturn != null ? popoverReturn : ccButton;
                     dropPicker();
                     pickerLayer = null;
