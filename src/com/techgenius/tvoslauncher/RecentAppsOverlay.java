@@ -143,14 +143,6 @@ public final class RecentAppsOverlay {
             dismiss();
         }
         ControlPanelOverlay.dismiss();
-        PowerService svc = PowerService.instance;
-        if (svc != null) {
-            try {
-                showWindowOverlay(svc);
-                return;
-            } catch (Exception ignored) {
-            }
-        }
         if (MainActivity.activeInstance != null && MainActivity.activeInstance.resumed) {
             MainActivity.activeInstance.runOnUiThread(() -> showInActivity(MainActivity.activeInstance));
             return;
@@ -957,9 +949,7 @@ public final class RecentAppsOverlay {
             long delay = (long) (lastAppIdx - i) * 70L;
             MAIN.postDelayed(() -> closeSingleCard(c, child, cardW, screenH, unit, false), delay);
         }
-        if (!allPkgs.isEmpty()) {
-            LocalAdb.forceStopPackagesAsync(c, allPkgs);
-        } else {
+        if (allPkgs.isEmpty()) {
             final Context appCtx = c.getApplicationContext();
             MAIN.postDelayed(() -> dismissAndReturnHome(appCtx), 1500L);
         }
@@ -1007,7 +997,6 @@ public final class RecentAppsOverlay {
             }
         } catch (Exception ignored) { }
 
-        LocalAdb.forceStopPackagesAsync(c, Collections.singletonList(pkg));
     }
 
     private static void launchRecentApp(Context c, RecentAppItem item) {

@@ -1984,39 +1984,8 @@ public final class CustomMedia {
     // ---------------------------------------------------------------- File Selector Dialog
 
     public static void ensureStoragePermissions(Activity a) {
-        if (a == null) return;
-        // Also grant silently via LocalAdb if paired and in Persistent ADB Mode
-        if (LocalAdb.isPaired(a) && LocalAdb.getAdbMode(a) == LocalAdb.ADB_MODE_PERSISTENT) {
-            new Thread(() -> {
-                try {
-                    String pkg = a.getPackageName();
-                    LocalAdb.execShellOutput(a,
-                            "pm grant " + pkg + " android.permission.READ_EXTERNAL_STORAGE 2>/dev/null; "
-                            + "pm grant " + pkg + " android.permission.WRITE_EXTERNAL_STORAGE 2>/dev/null; "
-                            + "pm grant " + pkg + " android.permission.READ_MEDIA_IMAGES 2>/dev/null; "
-                            + "appops set " + pkg + " MANAGE_EXTERNAL_STORAGE allow 2>/dev/null; "
-                            + "appops set " + pkg + " READ_EXTERNAL_STORAGE allow 2>/dev/null; "
-                            + "appops set " + pkg + " READ_MEDIA_IMAGES allow 2>/dev/null");
-                } catch (Throwable ignored) {
-                }
-            }).start();
-        }
-        try {
-            if (Build.VERSION.SDK_INT >= 33) {
-                if (a.checkSelfPermission("android.permission.READ_MEDIA_IMAGES") != PackageManager.PERMISSION_GRANTED) {
-                    a.requestPermissions(new String[]{"android.permission.READ_MEDIA_IMAGES", "android.permission.READ_EXTERNAL_STORAGE"}, 9402);
-                }
-            } else {
-                if (a.checkSelfPermission(android.Manifest.permission.READ_EXTERNAL_STORAGE) != PackageManager.PERMISSION_GRANTED
-                        || a.checkSelfPermission(android.Manifest.permission.WRITE_EXTERNAL_STORAGE) != PackageManager.PERMISSION_GRANTED) {
-                    a.requestPermissions(new String[]{
-                            android.Manifest.permission.READ_EXTERNAL_STORAGE,
-                            android.Manifest.permission.WRITE_EXTERNAL_STORAGE
-                    }, 9402);
-                }
-            }
-        } catch (Throwable ignored) {
-        }
+        // SAF grants access to the selected document without broad storage
+        // permissions or privileged ADB grants.
     }
 
     public static boolean onActivityResult(int reqCode, int resCode, Intent data) {
@@ -2353,11 +2322,7 @@ public final class CustomMedia {
     public static final String SETTINGS_BACKUP_FILENAME = "tvos-launcher-settings.json";
 
     private static final String[] KNOWN_PREF_NAMES = {
-        "settings", "setup", "profiles", "home", "home_default",
-        "app_custom_names", "button_mapper", "control_panel",
-        "weather", "suggestions", "inputs", "clicks",
-        "media_watch", "cleanyourtv", "cleanyourtv_prefs", "local_adb", "present",
-        "custom_media", "app_updater", "screensaver"
+        "home", "home_default", "app_custom_names", "screensaver"
     };
 
     private static File resolveDownloadFolder() {
@@ -2389,20 +2354,8 @@ public final class CustomMedia {
         root.put("version", 1);
         root.put("timestamp", System.currentTimeMillis());
 
-        java.util.Set<String> prefNames = new java.util.LinkedHashSet<>(java.util.Arrays.asList(KNOWN_PREF_NAMES));
-        try {
-            File spDir = new File(c.getApplicationInfo().dataDir, "shared_prefs");
-            File[] files = spDir.listFiles();
-            if (files != null) {
-                for (File f : files) {
-                    String n = f.getName();
-                    if (n.endsWith(".xml")) {
-                        prefNames.add(n.substring(0, n.length() - 4));
-                    }
-                }
-            }
-        } catch (Throwable ignored) {
-        }
+        java.util.Set<String> prefNames = new java.util.LinkedHashSet<>(
+                java.util.Arrays.asList(KNOWN_PREF_NAMES));
 
         org.json.JSONObject prefsObj = new org.json.JSONObject();
         for (String pName : prefNames) {
@@ -2462,6 +2415,7 @@ public final class CustomMedia {
         int restoredFiles = 0;
         while (prefKeys.hasNext()) {
             String pName = prefKeys.next();
+            if (!isSafeBackupPreference(pName)) continue;
             org.json.JSONObject entriesObj = prefsObj.optJSONObject(pName);
             if (entriesObj == null) continue;
 
@@ -2498,10 +2452,14 @@ public final class CustomMedia {
             restoredFiles++;
         }
         I18n.resetCache();
-        if (PowerService.instance != null) {
-            PowerService.instance.syncVolumeHoldFix();
-        }
         return restoredFiles > 0;
+    }
+
+    private static boolean isSafeBackupPreference(String name) {
+        for (String allowed : KNOWN_PREF_NAMES) {
+            if (allowed.equals(name)) return true;
+        }
+        return false;
     }
 
     public static void backupSettingsToDownload(Activity activity, Runnable onDone) {

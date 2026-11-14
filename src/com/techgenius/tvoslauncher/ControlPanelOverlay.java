@@ -90,15 +90,6 @@ public final class ControlPanelOverlay {
             MainActivity.activeInstance.runOnUiThread(() -> MainActivity.activeInstance.showControlCenter());
             return;
         }
-        PowerService svc = PowerService.instance;
-        if (svc != null) {
-            try {
-                showWindowOverlay(svc);
-                return;
-            } catch (Exception ignored) {
-                // Fall back to MainActivity panel
-            }
-        }
         Intent i = new Intent(c, MainActivity.class)
                 .putExtra("panel", "cc")
                 .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_SINGLE_TOP);
@@ -484,7 +475,7 @@ public final class ControlPanelOverlay {
             }, true));
         }
         if (isItemEnabled(c, ITEM_DND)) {
-            capsules.add(new CapsuleSpec("moon", I18n.s(c, "Do Not Disturb", "Rahatsız Etmeyin"),
+            capsules.add(new CapsuleSpec("moon", I18n.s(c, "Do Not Disturb", "Rahatsiz Etmeyin"),
                     () -> dndState(c), v -> toggleDnd(c), false));
         }
         if (isItemEnabled(c, ITEM_AUDIO)) {
@@ -494,14 +485,14 @@ public final class ControlPanelOverlay {
             }, false));
         }
         if (isItemEnabled(c, ITEM_TIMER)) {
-            capsules.add(new CapsuleSpec("timer", I18n.s(c, "Sleep Timer", "Uyku Zamanlayıcısı"),
+            capsules.add(new CapsuleSpec("timer", I18n.s(c, "Sleep Timer", "Uyku Zamanlayicisi"),
                     () -> timerState(c), v -> cycleSleepTimer(c), false));
         }
         if (isItemEnabled(c, ITEM_AMBIENT)) {
             boolean lockMode = isAmbientLockScreenMode(c);
             capsules.add(new CapsuleSpec("ambient",
-                    lockMode ? I18n.s(c, "Lock Screen", "Kilit Ekranı") : I18n.s(c, "Ambient Mode", "Ortam Modu"),
-                    () -> lockMode ? I18n.s(c, "Lock Now", "Şimdi Kilitle") : I18n.s(c, "Screensaver", "Ekran Koruyucu"),
+                    lockMode ? I18n.s(c, "Lock Screen", "Kilit Ekrani") : I18n.s(c, "Ambient Mode", "Ortam Modu"),
+                    () -> lockMode ? I18n.s(c, "Lock Now", "Simdi Kilitle") : I18n.s(c, "Screensaver", "Ekran Koruyucu"),
                     v -> {
                         dismissAll(c);
                         startAmbientMode(c);
@@ -509,10 +500,10 @@ public final class ControlPanelOverlay {
         }
         if (isItemEnabled(c, ITEM_POWER)) {
             capsules.add(new CapsuleSpec("power", I18n.s(c, "Power Off", "Kapat"),
-                    () -> I18n.s(c, "Screen Off", "Ekranı Kapat"),
+                    () -> I18n.s(c, "Screen Off", "Ekrani Kapat"),
                     v -> {
                         dismissAll(c);
-                        SleepReceiver.sleepNow(c);
+
                     }, false));
         }
 
@@ -765,8 +756,7 @@ public final class ControlPanelOverlay {
     public static boolean showWeatherOverlay(final Context c) {
         dismiss();
         dismissWeatherOverlay();
-        final Context hostCtx = PowerService.instance != null ? PowerService.instance
-                : (c instanceof android.app.Activity ? c : null);
+        final Context hostCtx = c instanceof android.app.Activity ? c : null;
         if (hostCtx == null) return false;
         final WindowManager wm = (WindowManager) hostCtx.getSystemService(Context.WINDOW_SERVICE);
         if (wm == null) return false;
@@ -817,7 +807,7 @@ public final class ControlPanelOverlay {
         plp.rightMargin = dp(u, 62);
         layer.addView(panel, plp);
 
-        int winType = (hostCtx instanceof PowerService)
+        int winType = (hostCtx false)
                 ? WindowManager.LayoutParams.TYPE_ACCESSIBILITY_OVERLAY
                 : WindowManager.LayoutParams.TYPE_APPLICATION_PANEL;
         int flags = WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN
@@ -1014,15 +1004,15 @@ public final class ControlPanelOverlay {
         try {
             ConnectivityManager cm = c.getSystemService(ConnectivityManager.class);
             NetworkCapabilities nc = cm.getNetworkCapabilities(cm.getActiveNetwork());
-            if (nc == null) return I18n.s(c, "Not Connected", "Bağlı Değil");
+            if (nc == null) return I18n.s(c, "Not Connected", "Bagli Degil");
             if (nc.hasTransport(NetworkCapabilities.TRANSPORT_ETHERNET)) return "Ethernet";
-            if (!nc.hasTransport(NetworkCapabilities.TRANSPORT_WIFI)) return I18n.s(c, "Connected", "Bağlı");
+            if (!nc.hasTransport(NetworkCapabilities.TRANSPORT_WIFI)) return I18n.s(c, "Connected", "Bagli");
             WifiManager wm = c.getApplicationContext().getSystemService(WifiManager.class);
             String ssid = wm.getConnectionInfo().getSSID();
-            if (ssid == null || ssid.contains("unknown ssid")) return I18n.s(c, "Connected", "Bağlı");
+            if (ssid == null || ssid.contains("unknown ssid")) return I18n.s(c, "Connected", "Bagli");
             return ssid.replace("\"", "");
         } catch (Exception e) {
-            return I18n.s(c, "Connected", "Bağlı");
+            return I18n.s(c, "Connected", "Bagli");
         }
     }
 
@@ -1040,14 +1030,14 @@ public final class ControlPanelOverlay {
             }
             BluetoothAdapter ba = BluetoothAdapter.getDefaultAdapter();
             if (ba != null) {
-                if (!ba.isEnabled()) return I18n.s(c, "Off", "Kapalı");
+                if (!ba.isEnabled()) return I18n.s(c, "Off", "Kapali");
                 try {
                     Set<BluetoothDevice> bonded = ba.getBondedDevices();
                     if (bonded != null && !bonded.isEmpty()) {
-                        return bonded.size() + I18n.s(c, " paired", " eşleşmiş");
+                        return bonded.size() + I18n.s(c, " paired", " eslesmis");
                     }
                 } catch (SecurityException ignored) { }
-                return I18n.s(c, "On", "Açık");
+                return I18n.s(c, "On", "Açik");
             }
         } catch (Exception ignored) { }
         return I18n.s(c, "Settings", "Ayarlar");
@@ -1061,7 +1051,7 @@ public final class ControlPanelOverlay {
     }
 
     public static String memoryState(Context c) {
-        return Math.round(memoryUsed(c) * 100) + I18n.s(c, "% used · Recent Apps", "% kullanımda · Son Uygulamalar");
+        return Math.round(memoryUsed(c) * 100) + I18n.s(c, "% used · Recent Apps", "% kullanimda · Son Uygulamalar");
     }
 
     private static void attachMemoryBar(Context c, View tile, float unit) {
@@ -1102,7 +1092,7 @@ public final class ControlPanelOverlay {
             if (!p.isEmpty() && Suggestions.installed(c, p)) apps.add(p);
         }
         if (apps.isEmpty()) {
-            Toast.makeText(c, I18n.s(c, "No apps to close", "Kapatılacak uygulama yok"), Toast.LENGTH_SHORT).show();
+            Toast.makeText(c, I18n.s(c, "No apps to close", "Kapatilacak uygulama yok"), Toast.LENGTH_SHORT).show();
             return;
         }
         ActivityManager.MemoryInfo miBefore = new ActivityManager.MemoryInfo();
@@ -1121,7 +1111,7 @@ public final class ControlPanelOverlay {
             updateMemoryBar(c);
             Toast.makeText(c, I18n.s(c,
                     "Closed " + apps.size() + (apps.size() == 1 ? " app" : " apps") + (freed > 0 ? " · freed " + freed + " MB" : ""),
-                    apps.size() + " uygulama kapatıldı" + (freed > 0 ? " · " + freed + " MB boşaltıldı" : "")),
+                    apps.size() + " uygulama kapatildi" + (freed > 0 ? " · " + freed + " MB bosaltildi" : "")),
                     Toast.LENGTH_SHORT).show();
         }, 500);
     }
@@ -1129,23 +1119,11 @@ public final class ControlPanelOverlay {
     public static String dndState(Context c) {
         NotificationManager nm = c.getSystemService(NotificationManager.class);
         return nm.getCurrentInterruptionFilter() > NotificationManager.INTERRUPTION_FILTER_ALL
-                ? I18n.s(c, "On", "Açık") : I18n.s(c, "Off", "Kapalı");
+                ? I18n.s(c, "On", "Açik") : I18n.s(c, "Off", "Kapali");
     }
 
     public static void toggleDnd(Context c) {
-        MediaWatchService svc = MediaWatchService.instance;
-        if (svc == null) {
-            if (c instanceof android.app.Activity) {
-                Perms.requestListener((android.app.Activity) c);
-            } else {
-                startExternal(c, new Intent(Settings.ACTION_NOTIFICATION_LISTENER_SETTINGS));
-            }
-            return;
-        }
-        NotificationManager nm = c.getSystemService(NotificationManager.class);
-        boolean on = nm.getCurrentInterruptionFilter() > NotificationManager.INTERRUPTION_FILTER_ALL;
-        svc.requestInterruptionFilter(on ? NotificationListenerService.INTERRUPTION_FILTER_ALL
-                : NotificationListenerService.INTERRUPTION_FILTER_PRIORITY);
+        return;
     }
 
     public static String audioState(Context c) {
@@ -1165,12 +1143,12 @@ public final class ControlPanelOverlay {
     }
 
     public static String timerState(Context c) {
-        int left = SleepReceiver.timerLeft(c);
-        return left > 0 ? left + I18n.s(c, " min left", " dk kaldı") : I18n.s(c, "Off", "Kapalı");
+        int left = 0;
+        return left > 0 ? left + I18n.s(c, " min left", " dk kaldi") : I18n.s(c, "Off", "Kapali");
     }
 
     public static void cycleSleepTimer(Context c) {
-        int left = SleepReceiver.timerLeft(c);
+        int left = 0;
         int[] steps = {15, 30, 60, 90};
         int next = steps[0];
         if (left > 0) {
@@ -1182,7 +1160,7 @@ public final class ControlPanelOverlay {
                 }
             }
         }
-        SleepReceiver.setTimer(c, next);
+        return;
     }
 
     // ---------------------------------------------------------------- Custom Control Panel Actions & Visibility
@@ -1247,16 +1225,16 @@ public final class ControlPanelOverlay {
         {ITEM_WIFI, "Wi-Fi", "Wi-Fi"},
         {ITEM_BLUETOOTH, "Bluetooth", "Bluetooth"},
         {ITEM_MEMORY, "Memory / Recent Apps", "Bellek / Son Uygulamalar"},
-        {ITEM_DND, "Do Not Disturb", "Rahatsız Etmeyin"},
-        {ITEM_AUDIO, "Audio Output", "Ses Çıkışı"},
-        {ITEM_TIMER, "Sleep Timer", "Uyku Zamanlayıcısı"},
-        {ITEM_AMBIENT, "Ambient Mode / Lock Screen", "Ortam Modu / Kilit Ekranı"},
-        {ITEM_POWER, "Power Off / Screen Off", "Kapat / Ekranı Kapat"},
-        {ITEM_INPUTS, "TV Inputs Shortcut", "TV Girişleri Kısayolu"},
-        {ITEM_MAPPER, "Button Mapper Shortcut", "Tuş Atayıcı Kısayolu"},
-        {ITEM_SETTINGS, "Settings Shortcut", "Ayarlar Kısayolu"},
-        {ITEM_SEARCH, "Search / Assistant Shortcut", "Arama / Asistan Kısayolu"},
-        {ITEM_WEATHER_PANEL, "Weather Panel (Current & Tomorrow)", "Hava Durumu Paneli (Şimdi ve Yarın)"}
+        {ITEM_DND, "Do Not Disturb", "Rahatsiz Etmeyin"},
+        {ITEM_AUDIO, "Audio Output", "Ses Çikisi"},
+        {ITEM_TIMER, "Sleep Timer", "Uyku Zamanlayicisi"},
+        {ITEM_AMBIENT, "Ambient Mode / Lock Screen", "Ortam Modu / Kilit Ekrani"},
+        {ITEM_POWER, "Power Off / Screen Off", "Kapat / Ekrani Kapat"},
+        {ITEM_INPUTS, "TV Inputs Shortcut", "TV Girisleri Kisayolu"},
+        {ITEM_MAPPER, "Button Mapper Shortcut", "Tus Atayici Kisayolu"},
+        {ITEM_SETTINGS, "Settings Shortcut", "Ayarlar Kisayolu"},
+        {ITEM_SEARCH, "Search / Assistant Shortcut", "Arama / Asistan Kisayolu"},
+        {ITEM_WEATHER_PANEL, "Weather Panel (Current & Tomorrow)", "Hava Durumu Paneli (Simdi ve Yarin)"}
     };
 
     public static android.content.SharedPreferences cpPrefs(Context c) {
@@ -1316,11 +1294,11 @@ public final class ControlPanelOverlay {
 
     public static String getActionSummary(Context c, String key) {
         if (ACTION_AMBIENT.equals(key) && isAmbientLockScreenMode(c)) {
-            return I18n.s(c, "Lock Screen", "Kilit Ekranı");
+            return I18n.s(c, "Lock Screen", "Kilit Ekrani");
         }
         String pkg = getCustomPkg(c, key);
         if (pkg == null || pkg.isEmpty()) {
-            return I18n.s(c, "Default (Automatic)", "Varsayılan (Otomatik)");
+            return I18n.s(c, "Default (Automatic)", "Varsayilan (Otomatik)");
         }
         String label = cpPrefs(c).getString(key + "_label", "");
         if (label != null && !label.isEmpty()) return label;
@@ -1382,7 +1360,7 @@ public final class ControlPanelOverlay {
             }
         } catch (Exception e) {
             // Unexported OEM activity fallback via local ADB if paired
-            if (LocalAdb.startActivityViaAdbAsync(c, pkg, cls)) {
+            if (false) {
                 return true;
             }
         }
@@ -1425,262 +1403,7 @@ public final class ControlPanelOverlay {
             MainActivity.activeInstance.runOnUiThread(() -> MainActivity.activeInstance.showSettingsSheet());
             return;
         }
-        PowerService svc = PowerService.instance;
-        if (svc == null) {
-            startExternal(c, new Intent(c, SettingsActivity.class));
-            return;
-        }
-        WindowManager wm = (WindowManager) svc.getSystemService(Context.WINDOW_SERVICE);
-        if (wm == null) {
-            startExternal(c, new Intent(c, SettingsActivity.class));
-            return;
-        }
-        final float u = Ui.unit(svc);
-        final FrameLayout[] rootRef = new FrameLayout[1];
-        final List<View> rows = new ArrayList<>();
-        final Runnable closeSheet = () -> {
-            if (rootRef[0] != null) {
-                try { wm.removeViewImmediate(rootRef[0]); } catch (Exception ignored) {}
-                rootRef[0] = null;
-            }
-        };
-
-        FrameLayout backdrop = new FrameLayout(svc) {
-            @Override
-            public boolean dispatchKeyEvent(KeyEvent ev) {
-                MainActivity.navSound(svc, ev);
-                if (ev.getKeyCode() == KeyEvent.KEYCODE_BACK || ev.getKeyCode() == KeyEvent.KEYCODE_ESCAPE) {
-                    if (ev.getAction() == KeyEvent.ACTION_UP) closeSheet.run();
-                    return true;
-                }
-                return super.dispatchKeyEvent(ev);
-            }
-        };
-        backdrop.setBackgroundColor(isBlurryBgMode(svc) ? 0x66000000 : 0x33000000);
-        backdrop.setClickable(true);
-        backdrop.setOnClickListener(v -> closeSheet.run());
-        rootRef[0] = backdrop;
-
-        LinearLayout card = new LinearLayout(svc);
-        card.setOrientation(LinearLayout.VERTICAL);
-        card.setClipChildren(true);
-        card.setClipToPadding(true);
-        int pad = dp(u, 8);
-        card.setPadding(pad, pad, pad, pad);
-        GradientDrawable sbg = new GradientDrawable(
-                GradientDrawable.Orientation.TOP_BOTTOM,
-                isBlurryBgMode(svc)
-                        ? new int[]{0xED242028, 0xE61A171E}
-                        : new int[]{0xC81C181E, 0xB816141A});
-        sbg.setCornerRadius(dp(u, 18));
-        sbg.setStroke(Math.max(1, dp(u, 1)), 0x38FFFFFF);
-        card.setBackground(sbg);
-
-        View btnHomeSettings = makeOverlayGearOptionRow(
-                svc,
-                u,
-                "sliders",
-                I18n.s(svc, "Home settings", "Ana ekran ayarları"),
-                I18n.s(svc, "Language, weather, scenes, apps and people",
-                        "Dil, hava durumu, sahneler, uygulamalar ve kişiler"),
-                () -> {
-                    closeSheet.run();
-                    startExternal(svc, new Intent(svc, SettingsActivity.class));
-                });
-        card.addView(btnHomeSettings);
-        rows.add(btnHomeSettings);
-
-        View btnTvSettings = makeOverlayGearOptionRow(
-                svc,
-                u,
-                "gear",
-                I18n.s(svc, "TV settings", "TV ayarları"),
-                I18n.s(svc, "Wi-Fi, picture, sound and the rest of the TV",
-                        "Wi-Fi, görüntü, ses ve diğer TV ayarları"),
-                () -> {
-                    closeSheet.run();
-                    startExternal(svc, new Intent(Settings.ACTION_SETTINGS));
-                });
-        LinearLayout.LayoutParams tvlp = new LinearLayout.LayoutParams(
-                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
-        tvlp.topMargin = dp(u, 2);
-        card.addView(btnTvSettings, tvlp);
-        rows.add(btnTvSettings);
-
-        if (CustomMedia.isRedditWallpaperActiveOnCurrentLook(svc)) {
-            View btnNextWall = makeOverlayGearOptionRow(
-                    svc,
-                    u,
-                    "refresh",
-                    I18n.s(svc, "Next wallpaper", "Sonraki duvar kağıdı"),
-                    I18n.s(svc, "Skip to the next Reddit wallpaper", "Sonraki Reddit duvar kağıdına geç"),
-                    () -> {
-                        closeSheet.run();
-                        Toast.makeText(svc,
-                                I18n.s(svc, "Loading next Reddit wallpaper…", "Sonraki Reddit duvar kağıdı yükleniyor…"),
-                                Toast.LENGTH_SHORT).show();
-                        CustomMedia.skipToNextRedditWallpaperOnCurrentLook(svc, null);
-                    });
-            LinearLayout.LayoutParams nwlp = new LinearLayout.LayoutParams(
-                    ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
-            nwlp.topMargin = dp(u, 2);
-            card.addView(btnNextWall, nwlp);
-            rows.add(btnNextWall);
-        }
-
-        for (int i = 0; i < rows.size(); i++) {
-            final int idx = i;
-            View r = rows.get(i);
-            r.setOnKeyListener((v, kc, ev) -> {
-                if (ev.getAction() != KeyEvent.ACTION_DOWN) return false;
-                if (kc == KeyEvent.KEYCODE_DPAD_UP) {
-                    rows.get((idx - 1 + rows.size()) % rows.size()).requestFocus();
-                    return true;
-                }
-                if (kc == KeyEvent.KEYCODE_DPAD_DOWN) {
-                    rows.get((idx + 1) % rows.size()).requestFocus();
-                    return true;
-                }
-                return false;
-            });
-        }
-
-        FrameLayout.LayoutParams slp = new FrameLayout.LayoutParams(
-                dp(u, 330), ViewGroup.LayoutParams.WRAP_CONTENT, Gravity.CENTER);
-        backdrop.addView(card, slp);
-
-        int flags = WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN;
-        if (isBlurryBgMode(svc) && android.os.Build.VERSION.SDK_INT >= 31) {
-            flags |= WindowManager.LayoutParams.FLAG_BLUR_BEHIND;
-        }
-        WindowManager.LayoutParams wlp = new WindowManager.LayoutParams(
-                WindowManager.LayoutParams.MATCH_PARENT,
-                WindowManager.LayoutParams.MATCH_PARENT,
-                WindowManager.LayoutParams.TYPE_ACCESSIBILITY_OVERLAY,
-                flags,
-                PixelFormat.TRANSLUCENT);
-        if (isBlurryBgMode(svc) && android.os.Build.VERSION.SDK_INT >= 31) {
-            try { wlp.setBlurBehindRadius(dp(u, 32)); } catch (Throwable ignored) {}
-        }
-        wm.addView(backdrop, wlp);
-        backdrop.setAlpha(0f);
-        card.setScaleX(0.94f);
-        card.setScaleY(0.94f);
-        backdrop.animate().alpha(1f).setDuration(180).start();
-        card.animate().scaleX(1f).scaleY(1f).setDuration(220).setInterpolator(MainActivity.LIFT).start();
-        btnHomeSettings.requestFocus();
-    }
-
-    private static View makeOverlayGearOptionRow(
-            Context c, float u, String glyphName, String title, String sub, Runnable onClick) {
-        LinearLayout row = new LinearLayout(c);
-        row.setOrientation(LinearLayout.HORIZONTAL);
-        row.setGravity(Gravity.CENTER_VERTICAL);
-        row.setPadding(dp(u, 7), dp(u, 7), dp(u, 14), dp(u, 7));
-        row.setFocusable(true);
-        row.setClickable(true);
-
-        GradientDrawable bg = new GradientDrawable();
-        bg.setCornerRadius(dp(u, 12));
-        bg.setColor(Color.TRANSPARENT);
-        row.setBackground(bg);
-
-        FrameLayout iconBox = new FrameLayout(c);
-        int iconBoxSz = dp(u, 28);
-        final float iconRad = iconBoxSz * 0.26f;
-        GradientDrawable ibg = new GradientDrawable();
-        ibg.setCornerRadius(iconRad);
-        ibg.setColor(0x1FFFFFFF);
-        iconBox.setBackground(ibg);
-        ImageView iconIv = new ImageView(c);
-        iconIv.setScaleType(ImageView.ScaleType.FIT_CENTER);
-        iconIv.setImageBitmap(Glyphs.get(glyphName, dp(u, 16), 0xEBF4F4F6));
-        iconBox.addView(iconIv, new FrameLayout.LayoutParams(dp(u, 16), dp(u, 16), Gravity.CENTER));
-        LinearLayout.LayoutParams iblp = new LinearLayout.LayoutParams(iconBoxSz, iconBoxSz);
-        iblp.rightMargin = dp(u, 10);
-        row.addView(iconBox, iblp);
-
-        LinearLayout texts = new LinearLayout(c);
-        texts.setOrientation(LinearLayout.VERTICAL);
-
-        TextView t = new TextView(c);
-        Ui.textSize(t, 13.5f);
-        t.setTypeface(Ui.font(c, "semibold"));
-        t.setTextColor(0xEBF4F4F6);
-        t.setText(title);
-        texts.addView(t);
-
-        TextView s = new TextView(c);
-        Ui.textSize(s, 9.5f);
-        s.setTypeface(Ui.font(c, "regular"));
-        s.setTextColor(0x9EF4F4F6);
-        s.setText(sub);
-        LinearLayout.LayoutParams slp = new LinearLayout.LayoutParams(
-                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
-        slp.topMargin = dp(u, 1);
-        texts.addView(s, slp);
-
-        row.addView(texts, new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f));
-
-        row.setOnFocusChangeListener((v, has) -> {
-            bg.setColor(has ? Color.WHITE : Color.TRANSPARENT);
-            ibg.setColor(has ? 0x12000000 : 0x1FFFFFFF);
-            iconIv.setImageBitmap(Glyphs.get(glyphName, dp(u, 16), has ? 0xFF111114 : 0xEBF4F4F6));
-            t.setTextColor(has ? 0xFF111114 : 0xEBF4F4F6);
-            s.setTextColor(has ? 0x99000000 : 0x9EF4F4F6);
-        });
-        row.setOnClickListener(v -> onClick.run());
-        return row;
-    }
-
-    // ---------------------------------------------------------------- System-Wide Input Panel Overlay (Feature 1 & 10)
-
-    private static WindowManager inputsOverlayWm;
-    private static FrameLayout inputsOverlayRoot;
-    private static List<View> inputsOverlayCells = new ArrayList<>();
-
-    public static boolean isInputsOverlayShowing() {
-        return inputsOverlayRoot != null;
-    }
-
-    public static void toggleInputsOverlay(Context c) {
-        if (isInputsOverlayShowing()) {
-            dismissInputsOverlay();
-            return;
-        }
-        showInputsOverlay(c);
-    }
-
-    public static void dismissInputsOverlay() {
-        if (inputsOverlayRoot != null && inputsOverlayWm != null) {
-            FrameLayout r = inputsOverlayRoot;
-            WindowManager wm = inputsOverlayWm;
-            inputsOverlayRoot = null;
-            inputsOverlayWm = null;
-            inputsOverlayCells.clear();
-            try {
-                wm.removeViewImmediate(r);
-            } catch (Exception ignored) {}
-        }
-    }
-
-    private static Inputs.Input makeFallbackInput(String id, String label, int type) {
-        Inputs.Input in = new Inputs.Input();
-        in.id = id;
-        in.label = label;
-        in.type = type;
-        in.passthrough = !"tv_channels".equals(id);
-        in.disconnected = false;
-        return in;
-    }
-
-    public static void showInputsOverlay(final Context c) {
-        dismiss();
-        dismissInputsOverlay();
-        final Context hostCtx = PowerService.instance != null ? PowerService.instance
-                : (MainActivity.activeInstance != null && MainActivity.activeInstance.resumed ? MainActivity.activeInstance : c);
-        if (!(hostCtx instanceof PowerService) && !(hostCtx instanceof android.app.Activity)) {
-            Intent i = new Intent(c, MainActivity.class)
+        Intent i = new Intent(c, MainActivity.class)
                     .putExtra("panel", "inputs")
                     .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_SINGLE_TOP);
             try {
@@ -1748,7 +1471,7 @@ public final class ControlPanelOverlay {
         title.setTypeface(Ui.font(hostCtx, "semibold"));
         title.setTextColor(0xBFFFFFFF);
         title.setShadowLayer(dp(u, 8), 0, dp(u, 2), 0xB3000000);
-        title.setText(I18n.s(hostCtx, "Inputs", "Girişler"));
+        title.setText(I18n.s(hostCtx, "Inputs", "Girisler"));
         panel.addView(title, new FrameLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, dp(u, 20)));
 
         MainActivity.LiquidGlass.Backdrop glassSrc = (isBlurryBgMode(hostCtx)
@@ -1762,7 +1485,7 @@ public final class ControlPanelOverlay {
             final Inputs.Input in = list.get(i);
             int x = (i % 2) * (col + gap);
             int y = top + (i / 2) * (cap + gap);
-            Status st = in.disconnected ? () -> I18n.s(hostCtx, "Not connected", "Bağlı değil") : null;
+            Status st = in.disconnected ? () -> I18n.s(hostCtx, "Not connected", "Bagli degil") : null;
             View tile = makeTile(
                     hostCtx, panel, x, y, col, cap, u, screenW, screenH, glassSrc,
                     Inputs.glyph(in), in.label, st, v -> {
@@ -1783,7 +1506,7 @@ public final class ControlPanelOverlay {
         plp.rightMargin = dp(u, 62);
         layer.addView(panel, plp);
 
-        int winType = (hostCtx instanceof PowerService)
+        int winType = (hostCtx false)
                 ? WindowManager.LayoutParams.TYPE_ACCESSIBILITY_OVERLAY
                 : WindowManager.LayoutParams.TYPE_APPLICATION_PANEL;
         int flags = WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN
@@ -1865,7 +1588,7 @@ public final class ControlPanelOverlay {
         Intent oemInputs = new Intent("com.android.tv.action.VIEW_INPUT");
         Intent castSettings = new Intent(Settings.ACTION_CAST_SETTINGS);
         if (!startExternal(c, oemInputs, setupInputs, tvView, castSettings)) {
-            ButtonMapper.sendKeyCode(c, KeyEvent.KEYCODE_TV_INPUT);
+
         }
     }
 
@@ -1989,9 +1712,9 @@ public final class ControlPanelOverlay {
             }
         } catch (Exception ignored) { }
 
-        Context overlayCtx = PowerService.instance != null ? PowerService.instance : c;
+        Context overlayCtx = c;
         WindowManager wm = (WindowManager) overlayCtx.getSystemService(Context.WINDOW_SERVICE);
-        if (wm != null && (PowerService.instance != null || overlayCtx instanceof android.app.Activity)) {
+        if (wm != null && (overlayCtx instanceof android.app.Activity)) {
             try {
                 FrameLayout black = new FrameLayout(overlayCtx) {
                     @Override
@@ -2022,9 +1745,7 @@ public final class ControlPanelOverlay {
                 black.setKeepScreenOn(true);
                 black.setOnClickListener(v -> dismissScreenOff());
 
-                int type = PowerService.instance != null
-                        ? WindowManager.LayoutParams.TYPE_ACCESSIBILITY_OVERLAY
-                        : WindowManager.LayoutParams.TYPE_APPLICATION_PANEL;
+                int type = WindowManager.LayoutParams.TYPE_APPLICATION_PANEL;
                 WindowManager.LayoutParams lp = new WindowManager.LayoutParams(
                         WindowManager.LayoutParams.MATCH_PARENT,
                         WindowManager.LayoutParams.MATCH_PARENT,

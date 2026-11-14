@@ -40,7 +40,7 @@ if [ -n "${RELEASE_KEYSTORE:-}" ]; then
     "$BT/apksigner" sign --ks "$RELEASE_KEYSTORE" --ks-pass env:RELEASE_KEYSTORE_PASS \
         --ks-key-alias "${RELEASE_KEY_ALIAS:-tvos-release}" --out build/tvos-home.apk build/aligned.apk
     echo "Signed with the release key"
-else
+elif [ "${BUILD_TYPE:-}" = "debug" ]; then
     KS=debug.keystore
     if [ ! -f "$KS" ]; then
         keytool -genkeypair -keystore "$KS" -storepass android -keypass android -alias debug \
@@ -49,6 +49,9 @@ else
     "$BT/apksigner" sign --ks "$KS" --ks-pass pass:android --key-pass pass:android \
         --out build/tvos-home.apk build/aligned.apk
     echo "Signed with the local debug key (development build)"
+else
+    echo "Release signing requires RELEASE_KEYSTORE and RELEASE_KEYSTORE_PASS. Set BUILD_TYPE=debug only for local debug builds." >&2
+    exit 1
 fi
 
 echo "Built build/tvos-home.apk"

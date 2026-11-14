@@ -425,7 +425,7 @@ final class SceneHome {
 
     void refreshMoonBtn() {
         if (moonBtn == null) return;
-        int left = SleepReceiver.timerLeft(host);
+        int left = 0;
         int mSize = dp(42);
         if (left > 0) {
             moonText.setText(left + I18n.s(host, "m", " dk"));
@@ -887,7 +887,7 @@ final class SceneHome {
             } catch (Exception ignored) {
             }
         }
-        List<Suggestions.Item> cw = MediaWatchService.Store.listForPackage(host, pkg, MAX_SHELF_ITEMS);
+        List<Suggestions.Item> cw = new ArrayList<>();
         String appName = host.appLabel(pkg);
         for (Suggestions.Item it : cw) {
             if (out.size() >= MAX_SHELF_ITEMS) break;
@@ -1267,13 +1267,8 @@ final class SceneHome {
             if (launch == null) launch = host.getPackageManager().getLaunchIntentForPackage(d.pkg);
             if (launch != null) {
                 host.showLaunchDim();
-                if (Suggestions.start(host, launch)) {
-                    host.overridePendingTransition(R.anim.app_open_enter, R.anim.app_open_exit);
-                    final String pkg = d.pkg;
-                    host.io.execute(() -> host.noteLaunched(pkg));
-                } else {
-                    host.clearLaunchDim();
-                }
+                host.startActivity(launch);
+                host.overridePendingTransition(R.anim.app_open_enter, R.anim.app_open_exit);
                 return;
             }
         }
@@ -1293,7 +1288,6 @@ final class SceneHome {
             destructive = labels.size();
             labels.add(I18n.s(host, "Remove from Keep Watching", "İzlemeye Devam Et'ten Kaldır"));
             actions.add(() -> {
-                MediaWatchService.Store.remove(host, d.key);
                 if (d.pkg != null) pkgWatchCache.remove(d.pkg);
                 refreshKeepWatching();
             });
@@ -1713,18 +1707,15 @@ final class SceneHome {
             if (launch == null) launch = host.getPackageManager().getLaunchIntentForPackage(a.pkg);
             if (launch != null) {
                 host.showLaunchDim();
-                if (Suggestions.start(host, launch)) {
-                    host.overridePendingTransition(R.anim.app_open_enter, R.anim.app_open_exit);
-                    final String pkg = a.pkg;
-                    host.io.execute(() -> host.noteLaunched(pkg));
-                } else {
-                    host.clearLaunchDim();
-                }
+                host.startActivity(launch);
+                host.overridePendingTransition(R.anim.app_open_enter, R.anim.app_open_exit);
                 return;
             }
             // Try opening Play Store or Settings if not installed on this device
-            if (!Suggestions.start(host, a.launch)) {
+            if (a.launch == null || a.launch.resolveActivity(host.getPackageManager()) == null) {
                 host.toast(I18n.s(host, a.label + " is not installed on this TV", a.label + " bu TV'de yüklü değil"));
+            } else {
+                host.startActivity(a.launch);
             }
             return;
         }
@@ -2354,7 +2345,7 @@ final class SceneHome {
         Ui.textSize(hSub, 11f);
         hSub.setTypeface(Ui.font(host, "regular"));
         hSub.setTextColor(0xB3F4F4F6);
-        int curLeft = SleepReceiver.timerLeft(host);
+        int curLeft = 0;
         hSub.setText(curLeft > 0
                 ? I18n.s(host, "Off in " + curLeft + " min", curLeft + " dk içinde kapanacak")
                 : I18n.s(host, "Turn the TV off after", "TV'yi şu süreden sonra kapat:"));
@@ -2392,7 +2383,6 @@ final class SceneHome {
                         .setDuration(150).setInterpolator(MainActivity.LIFT).start();
             });
             pill.setOnClickListener(v -> {
-                SleepReceiver.setTimer(host, m);
                 refreshMoonBtn();
                 closeSheet();
             });

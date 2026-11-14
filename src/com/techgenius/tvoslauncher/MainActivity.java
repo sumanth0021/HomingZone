@@ -296,15 +296,8 @@ public class MainActivity extends Activity {
         buildGrid();
         applyLookMode();
         registerPackageReceiver();
-        // Presentation mode: run the admin server if enabled, and honour "Start on boot".
-        com.techgenius.tvoslauncher.present.Presenter.ensureRunning(this);
-        if (com.techgenius.tvoslauncher.present.Presenter.justBooted()) {
-            handler.postDelayed(() -> com.techgenius.tvoslauncher.present.Presenter.openOnBootOnce(this), 1500);
-        }
         wakeReceiver = new BroadcastReceiver() {
             @Override public void onReceive(Context c, Intent i) {
-                AirPlayGuard.check(c, true);
-                LocalAdb.scheduleKeepAliveRepair(c, 1500L);
                 if (!Profiles.askOnWake(c) || Profiles.list(c).size() < 2) return;
                 if (resumed) {
                     showProfilePicker(true);
@@ -315,7 +308,6 @@ public class MainActivity extends Activity {
             }
         };
         registerReceiver(wakeReceiver, new IntentFilter(Intent.ACTION_SCREEN_ON));
-        LocalAdb.ensureKeepAliveWatchdog(this);
     }
 
     @Override
@@ -360,7 +352,6 @@ public class MainActivity extends Activity {
             else if (panel.equals("recents")) RecentAppsOverlay.showInActivity(this);
             else if (panel.equals("inputs")) ControlPanelOverlay.showInputsOverlay(this);
             else if (panel.equals("weather")) showWeather();
-            else if (panel.equals("present")) com.techgenius.tvoslauncher.present.Presenter.open(this);
             else if (panel.equals("search")) showSearch(intent.getStringExtra("q"));
             else if (panel.equals("ambient")) {
                 setIntent(intent);
@@ -441,9 +432,6 @@ public class MainActivity extends Activity {
             avatarView.setImageBitmap(Profiles.avatar(this, Profiles.current(this), avatarSize));
             avatarView.setVisibility(Profiles.list(this).size() > 1 ? View.VISIBLE : View.GONE);
         }
-        // Signed in to Nuvio/Stremio: refresh continue watching in the background. Signed out: no-op.
-        ensureTvListingsPermission();
-        MediaWatchService.ensureSessionTracking(this);
         if (sceneHome != null) sceneHome.onWatchPopupsResume();
         if (Scenes.isScenesLook(this) && sceneHome != null) {
             sceneHome.sceneView.setClassicClockOnlyMode(false);
@@ -471,8 +459,7 @@ public class MainActivity extends Activity {
         }
         if (launchOverlay != null) finishLaunchReturn();
         // Screensaver & Caffeine Mode: keep screen on when Caffeine Mode is enabled or screensaver is disallowed.
-        PowerService.syncCaffeine(this);
-        if (PowerService.isCaffeineEnabled(this) || !getSharedPreferences("screensaver", MODE_PRIVATE).getBoolean("allow", true)) {
+        if (!getSharedPreferences("screensaver", MODE_PRIVATE).getBoolean("allow", true)) {
             getWindow().addFlags(android.view.WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
         } else {
             getWindow().clearFlags(android.view.WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
@@ -481,20 +468,8 @@ public class MainActivity extends Activity {
         refreshAvatar();
         applyTabs();
         resetIdle();
-        // Opened from the app list while another launcher is the home screen: offer once to take over.
-        if (!Perms.isDefaultHome(this) && !prefs.getBoolean("asked_default_home", false)) {
-            prefs.edit().putBoolean("asked_default_home", true).apply();
-            new AlertDialog.Builder(this, android.R.style.Theme_DeviceDefault_Dialog_Alert)
-                    .setTitle(I18n.s(this, "Make tvOS Launcher your home screen?", "tvOS Launcher ana ekranınız yapılsın mı?"))
-                    .setMessage(I18n.s(this, "The Home button on the remote will open tvOS Launcher.", "Kumandadaki Ana Ekran düğmesi tvOS Launcher'ı açacaktır."))
-                    .setPositiveButton(I18n.s(this, "Make Home Screen", "Ana Ekran Yap"), (d, w) -> Perms.requestDefaultHome(this))
-                    .setNegativeButton(I18n.s(this, "Not Now", "Şimdi Değil"), null).show();
-        }
         handler.removeCallbacks(weatherTick);
         handler.post(weatherTick);
-        LocalAdb.ensureKeepAliveWatchdog(this);
-        LocalAdb.scheduleKeepAliveRepair(this, 1000L);
-        AppUpdater.checkAutoUpdateIfNeeded(this);
         SettingsActivity.prewarmCache(getApplicationContext());
         if (ambientShowcase || (getIntent() != null && "ambient".equals(getIntent().getStringExtra("panel")))) {
             if (getIntent() != null) getIntent().removeExtra("panel");
@@ -504,29 +479,6 @@ public class MainActivity extends Activity {
             getIntent().removeExtra("panel");
             getIntent().removeExtra("lock_from_external");
             enterLockScreen(ext);
-        }
-    }
-
-    private void ensureTvListingsPermission() {
-        try {
-            if (checkSelfPermission("android.permission.READ_TV_LISTINGS") == PackageManager.PERMISSION_GRANTED) {
-                return;
-            }
-            if (LocalAdb.getAdbMode(this) == LocalAdb.ADB_MODE_PERSISTENT) {
-                LocalAdb.grantVolumeLongPressPermissionIfNeeded(this, () -> {
-                    if (sceneHome != null && Scenes.isScenesLook(this)) {
-                        sceneHome.refreshKeepWatching();
-                    } else {
-                        loadHero();
-                    }
-                });
-                return;
-            }
-            if (cwEnabled() && !prefs.getBoolean("asked_tv_listings_perm", false)) {
-                prefs.edit().putBoolean("asked_tv_listings_perm", true).apply();
-                requestPermissions(new String[]{"android.permission.READ_TV_LISTINGS"}, 901);
-            }
-        } catch (Throwable ignored) {
         }
     }
 
@@ -860,7 +812,7 @@ public class MainActivity extends Activity {
         clp.topMargin = dp(24) - grow;
         clp.rightMargin = dockOuter - grow;
         root.addView(clockBox, clp);
-        watchNetwork();
+
 
         // Weather overview in the top-left corner, over the top shelf; OK opens the forecast.
         weatherCard = new WeatherView(this, false, unit);
@@ -2200,11 +2152,7 @@ public class MainActivity extends Activity {
     void updateEmpty() {
         boolean show = continueMode() && heroItems.isEmpty() && !folderMode;
         if (show) {
-            shelfEmpty.setText(MediaWatchService.granted(this)
-                    ? "Shows and movies you play will appear here."
-                    : !Perms.listenerSupported(this)
-                    ? "Continue Watching isn't available on this TV (Android limits it on low-memory TVs)."
-                    : "To see what you watch here, allow it in Settings \u2192 Permissions.");
+            shelfEmpty.setText("Continue Watching is disabled in this build.");
         }
         shelfEmpty.animate().alpha(show ? 0.75f : 0f).setDuration(250).start();
     }
@@ -2780,7 +2728,6 @@ public class MainActivity extends Activity {
     }
 
     void removeHeroItem(Suggestions.Item it) {
-        MediaWatchService.Store.remove(this, it.key);
         selectRemove(false);
         lastCwSig = "";
         heroVersion = -1;
@@ -2830,7 +2777,6 @@ public class MainActivity extends Activity {
                         act.add(() -> openHeroItem(it));
                         l.add("Remove from Continue Watching");
                         act.add(() -> {
-                            MediaWatchService.Store.remove(this, it.key);
                             heroItems = new ArrayList<>();
                             loadHero();
                         });
@@ -3019,27 +2965,13 @@ public class MainActivity extends Activity {
 
     void openHeroItem(Suggestions.Item it) {
         if ("news".equals(it.type)) return;  // news is read on the shelf; there is nothing to open
-        if (it.pkg.isEmpty()) {
-            Suggestions.open(this, it);
-            return;
+        if (it.pkg.isEmpty()) return;
+        for (AppEntry e : all.values()) {
+            if (it.pkg.equals(e.pkg) && e.launch != null) {
+                launchAnimated(heroButton, e);
+                return;
+            }
         }
-        MediaWatchService.Store.openContinueItem(this, it, () -> {
-            for (AppEntry e : all.values()) {
-                if (it.pkg.equals(e.pkg) && e.launch != null) {
-                    launchAnimated(heroButton, e);
-                    return;
-                }
-            }
-            Intent i = getPackageManager().getLeanbackLaunchIntentForPackage(it.pkg);
-            if (i == null) i = getPackageManager().getLaunchIntentForPackage(it.pkg);
-            if (i != null) {
-                showLaunchDim();
-                Suggestions.start(this, i);
-                overridePendingTransition(R.anim.app_open_enter, R.anim.app_open_exit);
-                final String pkg = it.pkg;
-                io.execute(() -> noteLaunched(pkg));
-            }
-        });
     }
 
     // ---------------------------------------------------------------- focus sway
@@ -3605,9 +3537,6 @@ public class MainActivity extends Activity {
             }
             return true;
         }
-        if (PowerService.instance == null && ButtonMapper.handleKeyEvent(this, ev)) {
-            return true;
-        }
         if (launchOverlay != null) return true;
         // Idle full-screen carousel: the first press only brings the Home Screen back.
         if (idle) {
@@ -3718,7 +3647,6 @@ public class MainActivity extends Activity {
         addResolved(pm, Intent.CATEGORY_LEANBACK_LAUNCHER, pkgs, true);
         addResolved(pm, Intent.CATEGORY_LAUNCHER, pkgs, false);
         if (!pkgs.contains(TV_SETTINGS)) addSettingsEntry(pm);
-        if (com.techgenius.tvoslauncher.present.Presenter.enabled(this)) addPresentEntry();
         inputs = Inputs.list(this);
         if (Inputs.showCard(this) && (!inputs.isEmpty() || ControlPanelOverlay.hasCustomAction(this, ControlPanelOverlay.ACTION_INPUTS))) {
             addInputsEntry();
@@ -3823,23 +3751,6 @@ public class MainActivity extends Activity {
         c.drawRect(0, 0, w, h, p);
         Bitmap g = Glyphs.get("input", (int) (h * 0.5f), Color.WHITE);
         c.drawBitmap(g, (w - g.getWidth()) / 2f, (h - g.getHeight()) / 2f, null);
-        e.banner = new BitmapDrawable(getResources(), b);
-        e.icon = e.banner;
-        all.put(e.key, e);
-    }
-
-    /** Presentation tile (shown while Presentation mode is on): tvOS-style card. */
-    void addPresentEntry() {
-        AppEntry e = new AppEntry();
-        e.key = PRESENT_KEY;
-        e.pkg = getPackageName();
-        e.defaultLabel = I18n.s(this, "Presentation", "Sunum");
-        e.label = getCustomAppName(this, e.key, null, e.defaultLabel);
-        e.system = true;
-        e.color = 0xFF4370FF;
-        e.launch = new Intent(this, com.techgenius.tvoslauncher.present.PresentationActivity.class)
-                .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
-        Bitmap b = com.techgenius.tvoslauncher.present.PresentIcon.banner(360, 216);
         e.banner = new BitmapDrawable(getResources(), b);
         e.icon = e.banner;
         all.put(e.key, e);
@@ -4446,12 +4357,7 @@ public class MainActivity extends Activity {
                     "Closed " + apps.size() + (apps.size() == 1 ? " app" : " apps") + (freed > 0 ? " \u00b7 freed " + freed + " MB" : ""),
                     apps.size() + " uygulama kapatıldı" + (freed > 0 ? " \u00b7 " + freed + " MB boşaltıldı" : "")));
         };
-        if (PowerService.instance != null) {
-            closeProfilePicker();
-            PowerService.forceStop(this, apps, () -> handler.postDelayed(done, 600));
-        } else {
-            handler.postDelayed(done, 800);
-        }
+        handler.postDelayed(done, 800);
     }
 
     long availMem(android.app.ActivityManager am) {
@@ -4476,24 +4382,6 @@ public class MainActivity extends Activity {
         }
     }
 
-    String dndState() {
-        android.app.NotificationManager nm = getSystemService(android.app.NotificationManager.class);
-        return nm.getCurrentInterruptionFilter() > android.app.NotificationManager.INTERRUPTION_FILTER_ALL
-                ? I18n.s(this, "On", "Açık") : I18n.s(this, "Off", "Kapalı");
-    }
-
-    void toggleDnd() {
-        MediaWatchService svc = MediaWatchService.instance;
-        if (svc == null) {
-            Perms.requestListener(this);
-            return;
-        }
-        android.app.NotificationManager nm = getSystemService(android.app.NotificationManager.class);
-        boolean on = nm.getCurrentInterruptionFilter() > android.app.NotificationManager.INTERRUPTION_FILTER_ALL;
-        svc.requestInterruptionFilter(on ? NotificationListenerService.INTERRUPTION_FILTER_ALL
-                : NotificationListenerService.INTERRUPTION_FILTER_PRIORITY);
-    }
-
     String audioOutput() {
         android.media.AudioManager am = getSystemService(android.media.AudioManager.class);
         for (android.media.AudioDeviceInfo d : am.getDevices(android.media.AudioManager.GET_DEVICES_OUTPUTS)) {
@@ -4506,25 +4394,6 @@ public class MainActivity extends Activity {
         }
         return I18n.s(this, "TV Speakers", "TV Hoparlörü");
     }
-
-    String timerState() {
-        int left = SleepReceiver.timerLeft(this);
-        return left > 0 ? left + I18n.s(this, " min left", " dk kaldı") : I18n.s(this, "Off", "Kapalı");
-    }
-
-    /** Off \u2192 15 \u2192 30 \u2192 60 \u2192 90 \u2192 Off. */
-    void cycleSleepTimer() {
-        int left = SleepReceiver.timerLeft(this);
-        int[] steps = {15, 30, 60, 90};
-        int next = steps[0];
-        if (left > 0) {
-            next = 0;
-            for (int st : steps) if (st > left + 1) { next = st; break; }
-        }
-        SleepReceiver.setTimer(this, next);
-        if (sceneHome != null) sceneHome.refreshMoonBtn();
-    }
-
 
     // ---------------------------------------------------------------- inputs
 
@@ -4976,27 +4845,17 @@ public class MainActivity extends Activity {
     int tickCount;
     final Runnable weatherTick = new Runnable() {
         @Override public void run() {
-            Weather.refresh(MainActivity.this, false, MainActivity.this::updateWeather);
             updateWeather();
-            // Carousel content rotates even if Home stays open for hours (fetches only when stale).
-            if (++tickCount % 5 == 0 && !shelfView.hasFocus()) loadHero();
             if (!Scenes.isScenesLook(MainActivity.this)) {
                 if (CustomMedia.isCustomWallpaperEnabled(MainActivity.this, CustomMedia.SCOPE_CLASSIC)) {
                     int cm = CustomMedia.getCustomWallpaperSubMode(MainActivity.this, CustomMedia.SCOPE_CLASSIC);
                     if (cm == CustomMedia.CUSTOM_MODE_FOLDER_SHUFFLE) {
                         setWallpaper(wallStyle);
-                    } else if (cm == CustomMedia.CUSTOM_MODE_REDDIT
-                            && CustomMedia.isRedditChangeDue(MainActivity.this, CustomMedia.SCOPE_CLASSIC)) {
-                        CustomMedia.fetchNextRedditWallpaperAsync(MainActivity.this, CustomMedia.SCOPE_CLASSIC,
-                                () -> setWallpaper(wallStyle));
                     }
                 } else if (FOLDER_SHUFFLE_WALL_KEY.equals(wallStyle)) {
                     setWallpaper(wallStyle);
                 }
             }
-            if (tickCount % 15 == 0) AirPlayGuard.check(MainActivity.this, false);
-            LocalAdb.checkAndRepairPermissionsIfNeeded(MainActivity.this, false);
-            updateNet();
             handler.postDelayed(this, 60 * 1000L);
         }
     };
@@ -5016,11 +4875,7 @@ public class MainActivity extends Activity {
 
     void syncCaffeineWindowFlag() {
         if (getWindow() == null) return;
-        if (PowerService.isCaffeineEnabled(this)) {
-            getWindow().addFlags(android.view.WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
-        } else {
-            getWindow().clearFlags(android.view.WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
-        }
+        getWindow().clearFlags(android.view.WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
     }
 
     boolean weatherOpen;
@@ -5939,3 +5794,4 @@ public class MainActivity extends Activity {
         Toast.makeText(this, s, Toast.LENGTH_SHORT).show();
     }
 }
+
