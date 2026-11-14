@@ -267,8 +267,8 @@ public class MainActivity extends Activity {
         dockInset = dp(24);
         side = dockOuter + dockInset;
         gap = dp(18);
-        tileW = dp(144);
-        tileH = dp(81);
+        tileW = (screenW - 2 * side - (COLS - 1) * gap) / COLS;
+        tileH = tileW * 3 / 5;
         labelH = dp(30);
         radius = dp(14);
         shelfH = (int) (screenH * 0.72f);
