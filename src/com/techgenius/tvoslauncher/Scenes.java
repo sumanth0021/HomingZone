@@ -610,7 +610,7 @@ public final class Scenes {
     // ─── Classic Appearance Big Clock & Clock Alignment ───
 
     public static boolean isClassicBigClockEnabled(Context c) {
-        return prefs(c).getBoolean("classic_big_clock", true);
+        return false;
     }
 
     public static void setClassicBigClockEnabled(Context c, boolean enabled) {

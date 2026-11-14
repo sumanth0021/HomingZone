@@ -57,11 +57,7 @@ import java.util.concurrent.Executors;
  * Default Home Dashboard displayed when no application is selected, when focus is on
  * non-app elements (Settings, More, top bar), or when the focused app has no Continue Watching items.
  *
- * Displays 4 customizable Liquid Glass widgets in one horizontal row:
- *  1. Prayer Times: Daily prayer schedule and live countdown to the next prayer.
- *  2. Football Matches: Upcoming matches, live scores, and favorite teams.
- *  3. Latest Releases: Recently released movies and TV series from streaming platforms.
- *  4. Weather: Current conditions and forecast.
+ * Displays the weather Liquid Glass widget in one horizontal row.
  */
 public final class HomeDashboard {
 
@@ -169,10 +165,7 @@ public final class HomeDashboard {
     }
 
     public static boolean hasAnyWidgetEnabled(Context c) {
-        return isEnabled(c) && (isWidgetPrayerEnabled(c)
-                || isWidgetFootballEnabled(c)
-                || isWidgetReleasesEnabled(c)
-                || isWidgetWeatherEnabled(c));
+        return isEnabled(c) && isWidgetWeatherEnabled(c);
     }
 
     public static boolean isAnyEnabled(Context c) {
@@ -915,15 +908,6 @@ public final class HomeDashboard {
 
         final List<View> cards = new ArrayList<View>();
 
-        if (isWidgetPrayerEnabled(host)) {
-            cards.add(createPrayerWidgetCard(host));
-        }
-        if (isWidgetFootballEnabled(host)) {
-            cards.add(createFootballWidgetCard(host));
-        }
-        if (isWidgetReleasesEnabled(host)) {
-            cards.add(createReleasesWidgetCard(host));
-        }
         if (isWidgetWeatherEnabled(host)) {
             cards.add(createWeatherWidgetCard(host, nav));
         }
