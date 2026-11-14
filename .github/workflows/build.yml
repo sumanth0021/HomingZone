@@ -29,7 +29,7 @@ jobs:
       - name: Build signed debug APK
         run: |
           chmod +x build.sh
-          ./build.sh
+          BUILD_TYPE=debug ./build.sh
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
