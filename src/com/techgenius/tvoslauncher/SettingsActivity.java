@@ -31,6 +31,10 @@ public final class SettingsActivity extends Activity {
     private ImageView heroPreview;
     private TextView selectedTitle;
 
+    public static void prewarmCache(android.content.Context context) {
+        // The settings screen uses local assets only; there is no remote cache to prewarm.
+    }
+
     private int dp(float value) {
         return Math.round(value * getResources().getDisplayMetrics().density);
     }
