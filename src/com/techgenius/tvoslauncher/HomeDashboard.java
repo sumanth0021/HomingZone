@@ -165,7 +165,7 @@ public final class HomeDashboard {
     }
 
     public static boolean hasAnyWidgetEnabled(Context c) {
-        return isEnabled(c) && isWidgetWeatherEnabled(c);
+        return false;
     }
 
     public static boolean isAnyEnabled(Context c) {
@@ -908,9 +908,6 @@ public final class HomeDashboard {
 
         final List<View> cards = new ArrayList<View>();
 
-        if (isWidgetWeatherEnabled(host)) {
-            cards.add(createWeatherWidgetCard(host, nav));
-        }
         if (outCards != null) {
             outCards.clear();
             outCards.addAll(cards);

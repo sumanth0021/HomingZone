@@ -814,31 +814,32 @@ public class MainActivity extends Activity {
         root.addView(clockBox, clp);
 
 
-        // Weather overview in the top-left corner, over the top shelf; OK opens the forecast.
+        // Keep the forecast model available to existing weather flows without placing a card on
+        // the home screen. Forecasts remain reachable from the weather shortcut.
         weatherCard = new WeatherView(this, false, unit);
-        weatherGlass = new LiquidGlass(dp(WeatherView.COMPACT_H) / 2f, 0x2E000000, glassSource, screenW, screenH, unit).adaptive();
-        weatherGlass.lens = dp(6);
-        weatherCard.setBackground(weatherGlass);
-        weatherCard.setFocusable(true);
-        weatherCard.setClickable(true);
-        weatherCard.setOnFocusChangeListener((v, has) -> {
-            weatherGlass.setLit(has);
-            if (has) {
-                v.setAlpha(1f);
-                onClassicNonAppFocused();
-            }
-            v.animate().scaleX(has ? 1.05f : 1f).scaleY(has ? 1.05f : 1f).translationZ(has ? dp(10) : 0)
-                    .setDuration(200).setInterpolator(LIFT).start();
+        weatherCard.setVisibility(View.GONE);
+
+        weatherShortcutIcon = new ImageView(this);
+        weatherShortcutIcon.setImageBitmap(Glyphs.get("cloud", dp(20), Color.WHITE));
+        weatherShortcutGlass = new LiquidGlass(dp(18), 0x2E000000, glassSource, screenW, screenH, unit).adaptive();
+        weatherShortcutGlass.lens = dp(4);
+        weatherShortcutIcon.setBackground(weatherShortcutGlass);
+        weatherShortcutIcon.setFocusable(true);
+        weatherShortcutIcon.setClickable(true);
+        weatherShortcutIcon.setContentDescription("Weather");
+        weatherShortcutIcon.setOnFocusChangeListener((v, has) -> {
+            weatherShortcutGlass.setLit(has);
+            weatherShortcutIcon.setImageBitmap(Glyphs.get("cloud", dp(20), has ? 0xFF111114 : Color.WHITE));
+            v.animate().scaleX(has ? 1.12f : 1f).scaleY(has ? 1.12f : 1f)
+                    .setDuration(180).setInterpolator(LIFT).start();
+            if (has) onClassicNonAppFocused();
         });
-        weatherCard.setPivotX(0);
-        weatherCard.setPivotY(0);
-        weatherCard.setOnClickListener(v -> showWeather());
-        // Top left, level with the status row and inside the same 48 px edge margin.
-        FrameLayout.LayoutParams wlp = new FrameLayout.LayoutParams(dp(WeatherView.COMPACT_W), dp(WeatherView.COMPACT_H),
+        weatherShortcutIcon.setOnClickListener(v -> showWeather());
+        FrameLayout.LayoutParams wip = new FrameLayout.LayoutParams(dp(36), dp(36),
                 Gravity.TOP | Gravity.START);
-        wlp.topMargin = dp(24);
-        wlp.leftMargin = dockOuter;
-        root.addView(weatherCard, wlp);
+        wip.topMargin = dp(24);
+        wip.leftMargin = dockOuter;
+        root.addView(weatherShortcutIcon, wip);
         root.addView(sceneHome.overlay, match());
 
         launchDimView = new View(this) {
@@ -870,9 +871,11 @@ public class MainActivity extends Activity {
             classicWeatherButton.setVisibility(showWxShortcut ? View.VISIBLE : View.GONE);
         }
         if (weatherCard != null) {
-            boolean showCard = !bigClock && Weather.enabled(this) && Weather.cached(this) != null;
-            if (!showCard && weatherCard.isFocused()) focusTop();
-            weatherCard.setVisibility(showCard ? View.VISIBLE : View.GONE);
+            if (weatherCard.isFocused()) focusTop();
+            weatherCard.setVisibility(View.GONE);
+        }
+        if (weatherShortcutIcon != null) {
+            weatherShortcutIcon.setVisibility(Weather.enabled(this) ? View.VISIBLE : View.GONE);
         }
         if (sceneHome != null) {
             if (wallView != null && wallView.getDrawable() instanceof BitmapDrawable) {
@@ -2651,6 +2654,8 @@ public class MainActivity extends Activity {
     SearchPanel search;
     android.net.ConnectivityManager.NetworkCallback netCallback;
     WeatherView weatherCard;
+    ImageView weatherShortcutIcon;
+    LiquidGlass weatherShortcutGlass;
     LiquidGlass weatherGlass;
     int avatarSize;
     FrameLayout pickerLayer;
@@ -4852,7 +4857,9 @@ public class MainActivity extends Activity {
     };
 
     boolean weatherShown() {
-        return weatherCard != null && weatherCard.getVisibility() == View.VISIBLE && weatherAlpha() > 0.5f;
+        return weatherShortcutIcon != null
+                && weatherShortcutIcon.getVisibility() == View.VISIBLE
+                && weatherAlpha() > 0.5f;
     }
 
     void showSettingsSheet() {
@@ -4892,11 +4899,16 @@ public class MainActivity extends Activity {
             boolean showShortcut = bigClock && SceneHome.isWeatherShortcutEnabled(this) && Weather.enabled(this);
             classicWeatherButton.setVisibility(showShortcut ? View.VISIBLE : View.GONE);
         }
-        boolean show = d != null && !Scenes.isScenesLook(this) && !bigClock;
-        if (!show && weatherCard.isFocused()) focusTop();
-        weatherCard.setVisibility(show ? View.VISIBLE : View.GONE);
+        boolean show = false;
+        if (weatherCard.isFocused()) focusTop();
+        weatherCard.setVisibility(View.GONE);
         weatherCard.setData(d);
-        if (show && !weatherCard.isFocused() && launchOverlay == null) weatherCard.setAlpha(weatherAlpha());
+        if (weatherShortcutIcon != null) {
+            weatherShortcutIcon.setVisibility(Weather.enabled(this) && !Scenes.isScenesLook(this)
+                    ? View.VISIBLE : View.GONE);
+            if (weatherShortcutIcon.getVisibility() == View.VISIBLE
+                    && launchOverlay == null) weatherShortcutIcon.setAlpha(weatherAlpha());
+        }
     }
 
     /** The full forecast: a glass panel opening from the weather card in the top-left corner (or top-right weather shortcut in Night Scenes / Classic Big Clock). */
@@ -4925,7 +4937,7 @@ public class MainActivity extends Activity {
             popoverReturn = classicWeatherButton;
             rightSide = true;
         } else {
-            popoverReturn = weatherCard;
+            popoverReturn = weatherShortcutIcon;
         }
         FrameLayout layer = new FrameLayout(this);
         layer.setClickable(true);
