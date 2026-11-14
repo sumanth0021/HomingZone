@@ -67,10 +67,8 @@ import java.util.concurrent.Executors;
 public class LauncherActivity extends Activity {
 
     // ---- Wallpaper -------------------------------------------------------------------------
-    // To use another wallpaper, drop a 1280x720 JPG named wallpaper_default.jpg into
-    // app/src/main/res/drawable-nodpi/ (replacing the placeholder). Or add a new file there and
-    // point this constant at it.
-    private static final int WALLPAPER = R.drawable.wallpaper_default;
+    // The default is a minimal black cinematic background. Selected images are stored as
+    // persistable Storage Access Framework URIs and decoded to the display size off the UI thread.
 
     // ---- Layout (dp) -----------------------------------------------------------------------
     private static final int SAFE_H = 48;        // keep content away from the TV's left/right edges
@@ -96,7 +94,7 @@ public class LauncherActivity extends Activity {
     private static final String ORDER_KEY = "packages";
     private static final String WALLPAPER_PREFS = "wallpaper";
     private static final String WALLPAPER_URI_KEY = "uri";
-    private static final int PICK_WALLPAPER = 42;
+    private static final int PICK_SETTINGS = 43;
 
     private static final int BLACK = Color.rgb(6, 8, 13);
     private static final int WHITE = Color.WHITE;
@@ -300,7 +298,7 @@ public class LauncherActivity extends Activity {
         root = new FrameLayout(this);
         // Shown behind the wallpaper, and kept if the wallpaper cannot be loaded.
         root.setBackground(new GradientDrawable(GradientDrawable.Orientation.TOP_BOTTOM,
-                new int[]{Color.rgb(20, 32, 48), BLACK}));
+                new int[]{Color.rgb(12, 14, 20), BLACK}));
 
         addWallpaper();
         addShades();
@@ -315,7 +313,6 @@ public class LauncherActivity extends Activity {
         wallpaperView = new ImageView(this);
         wallpaperView.setScaleType(ImageView.ScaleType.CENTER_CROP);
         root.addView(wallpaperView, new FrameLayout.LayoutParams(-1, -1));
-        wallpaperView.setImageResource(WALLPAPER);
         loadWallpaperAsync();
     }
 
@@ -326,7 +323,9 @@ public class LauncherActivity extends Activity {
         wallpaperExecutor.execute(() -> {
             Bitmap bitmap = null;
             try {
-                bitmap = decodeForDisplay(savedUri.isEmpty() ? null : Uri.parse(savedUri), WALLPAPER);
+                if (!savedUri.isEmpty()) {
+                    bitmap = decodeForDisplay(Uri.parse(savedUri));
+                }
             } catch (IOException | RuntimeException | OutOfMemoryError ignored) {
                 // The built-in image remains visible if the selected file is invalid or too large.
             }
@@ -336,13 +335,12 @@ public class LauncherActivity extends Activity {
                     if (result != null) result.recycle();
                     return;
                 }
-                if (result != null) {
-                    Bitmap old = wallpaperBitmap;
-                    wallpaperBitmap = result;
-                    wallpaperView.setImageBitmap(result);
-                    if (old != null && old != result) old.recycle();
-                    updateDockFrost();
-                }
+                Bitmap old = wallpaperBitmap;
+                wallpaperBitmap = result;
+                if (result != null) wallpaperView.setImageBitmap(result);
+                else wallpaperView.setImageDrawable(null);
+                if (old != null && old != result) old.recycle();
+                updateDockFrost();
             });
         });
     }
@@ -461,26 +459,16 @@ public class LauncherActivity extends Activity {
         wifiLp.rightMargin = dp(10);
         bar.addView(wifi, wifiLp);
 
-        // Settings button (focusable). A long press picks a wallpaper.
+        // Settings button (focusable). Wallpaper and launcher details live in the
+        // lightweight HomingZone settings screen.
         ImageView settings = topButton("Settings");
         settings.setImageResource(R.drawable.ic_settings);
         settings.setOnClickListener(v -> {
             try {
-                startActivity(new Intent(Settings.ACTION_SETTINGS));
+                startActivityForResult(new Intent(this, WallpaperSettingsActivity.class), PICK_SETTINGS);
             } catch (Exception e) {
                 Toast.makeText(this, "Settings can't be opened", Toast.LENGTH_SHORT).show();
             }
-        });
-        settings.setOnLongClickListener(v -> {
-            Intent picker = new Intent(Intent.ACTION_OPEN_DOCUMENT);
-            picker.addCategory(Intent.CATEGORY_OPENABLE);
-            picker.setType("image/*");
-            try {
-                startActivityForResult(picker, PICK_WALLPAPER);
-            } catch (RuntimeException e) {
-                Toast.makeText(this, "Wallpaper picker unavailable", Toast.LENGTH_SHORT).show();
-            }
-            return true;
         });
         bar.addView(settings, new LinearLayout.LayoutParams(dp(38), dp(38)));
 
@@ -520,20 +508,7 @@ public class LauncherActivity extends Activity {
 
     @Override protected void onActivityResult(int requestCode, int resultCode, Intent data) {
         super.onActivityResult(requestCode, resultCode, data);
-        if (requestCode != PICK_WALLPAPER || resultCode != RESULT_OK
-                || data == null || data.getData() == null) return;
-
-        Uri uri = data.getData();
-        try {
-            int flags = data.getFlags() & (Intent.FLAG_GRANT_READ_URI_PERMISSION
-                    | Intent.FLAG_GRANT_WRITE_URI_PERMISSION);
-            getContentResolver().takePersistableUriPermission(uri, flags);
-        } catch (SecurityException ignored) {
-            // Some TV pickers return a readable URI without persistable permission.
-        }
-        getSharedPreferences(WALLPAPER_PREFS, MODE_PRIVATE).edit()
-                .putString(WALLPAPER_URI_KEY, uri.toString()).apply();
-        loadWallpaperAsync();
+        if (requestCode == PICK_SETTINGS && resultCode == RESULT_OK) loadWallpaperAsync();
     }
 
     /**
@@ -565,7 +540,13 @@ public class LauncherActivity extends Activity {
     }
 
     private void styleTopButton(ImageView button, boolean focused) {
-        button.setBackground(roundRect(focused ? Color.argb(240, 245, 245, 248) : GLASS_FILL, dp(50)));
+        GradientDrawable background = new GradientDrawable(
+                GradientDrawable.Orientation.TL_BR,
+                focused
+                        ? new int[]{Color.rgb(250, 250, 252), Color.rgb(214, 218, 228)}
+                        : new int[]{Color.argb(122, 145, 151, 169), Color.argb(76, 62, 67, 82)});
+        background.setCornerRadius(dp(50));
+        button.setBackground(background);
         if (focused) button.setColorFilter(Color.rgb(20, 22, 28));
         else button.clearColorFilter();
     }
@@ -966,13 +947,16 @@ public class LauncherActivity extends Activity {
             Bitmap picked = decodeSmall(Uri.parse(saved), 0);
             if (picked != null) return picked;
         }
-        return decodeSmall(null, WALLPAPER);
+        Bitmap black = Bitmap.createBitmap(FROST_SOURCE_W, Math.max(1, FROST_SOURCE_W * 9 / 16),
+                Bitmap.Config.ARGB_8888);
+        black.eraseColor(BLACK);
+        return black;
     }
 
-    private Bitmap decodeForDisplay(Uri uri, int resId) throws IOException {
+    private Bitmap decodeForDisplay(Uri uri) throws IOException {
         BitmapFactory.Options bounds = new BitmapFactory.Options();
         bounds.inJustDecodeBounds = true;
-        decode(uri, resId, bounds);
+        decode(uri, 0, bounds);
         if (bounds.outWidth <= 0 || bounds.outHeight <= 0) return null;
 
         int targetWidth = getResources().getDisplayMetrics().widthPixels;
@@ -985,7 +969,7 @@ public class LauncherActivity extends Activity {
         BitmapFactory.Options options = new BitmapFactory.Options();
         options.inSampleSize = sample;
         options.inPreferredConfig = Bitmap.Config.RGB_565;
-        return decode(uri, resId, options);
+        return decode(uri, 0, options);
     }
 
     /** Decodes either a picked image (uri) or a built-in resource, shrunk with inSampleSize. */
@@ -1127,8 +1111,17 @@ public class LauncherActivity extends Activity {
         t.setText(value);
         t.setTextSize(sizeSp);
         t.setTextColor(color);
-        t.setTypeface(Typeface.create(medium ? "sans-serif-medium" : "sans-serif", Typeface.NORMAL));
+        t.setTypeface(assetTypeface(medium ? "Inter-Medium.ttf" : "Inter-Regular.ttf",
+                Typeface.create(medium ? "sans-serif-medium" : "sans-serif", Typeface.NORMAL)));
         return t;
+    }
+
+    private Typeface assetTypeface(String name, Typeface fallback) {
+        try {
+            return Typeface.createFromAsset(getAssets(), "fonts/" + name);
+        } catch (RuntimeException ignored) {
+            return fallback;
+        }
     }
 
     private GradientDrawable roundRect(int color, int radius) {

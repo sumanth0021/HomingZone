@@ -26,5 +26,12 @@
                 <category android:name="android.intent.category.DEFAULT" />
             </intent-filter>
         </activity>
+        <activity
+            android:name=".WallpaperSettingsActivity"
+            android:exported="false"
+            android:screenOrientation="landscape"
+            android:excludeFromRecents="true"
+            android:windowSoftInputMode="adjustNothing"
+            android:configChanges="keyboard|keyboardHidden|navigation|orientation|screenSize" />
     </application>
 </manifest>

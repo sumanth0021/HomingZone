@@ -16,7 +16,11 @@ Inspired by the simplicity of Apple TV, with its own look:
 `preview.html` is a browser mock-up of the layout (same sizes as the app). It shows the look only; it cannot test the real remote or the TV.
 
 ## Changing the wallpaper
-Replace `app/src/main/res/drawable-nodpi/wallpaper_default.jpg` with your own **1280x720 JPG** (the TV's real resolution; keep it under about 300 KB so it uses little memory). To use a different file name, change the `WALLPAPER` constant at the top of `LauncherActivity.java`.
+The default is a minimal black cinematic background. Open the top-right **Settings** button,
+choose **Choose wallpaper**, and select a JPG, JPEG, PNG, or WebP from TV storage or USB storage.
+The preview is loaded at a memory-safe size; press **Apply** to save it, **Cancel** to leave the
+current wallpaper unchanged, or **Restore default black background** to remove it. The selected
+Storage Access Framework URI is persisted across launcher restarts.
 
 ## Build without Android Studio
 1. Push the project to GitHub (or open **Actions** and run **Build HomingZone APK** manually).
@@ -50,7 +54,6 @@ The Google TV launcher is never uninstalled or disabled by this project.
 - The dock is a translucent gradient, not a real blur (live background blur is too heavy for this TV class).
 - The profile icon is decorative.
 - Favourites editing is not implemented yet.
-- To choose a wallpaper, long-press the Settings button, open a folder in the Android file picker,
-  and select an image. The selected image is downsampled and loaded in the background to keep
-  remote navigation responsive.
+- Wallpaper settings include preview/apply/cancel, restore-default, installed application
+  information, and HomingZone version/about information.
 - Not yet verified on the real TV; see the test checklist in the change notes.
